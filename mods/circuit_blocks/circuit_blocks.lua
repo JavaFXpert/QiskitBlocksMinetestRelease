@@ -1222,8 +1222,10 @@ function circuit_blocks:register_circuit_block(circuit_node_type,
                     end
 
                 elseif node_type == CircuitNodeTypes.CONNECTOR_M then
-                    -- If shift key is down, delete this block and the wire extension
-                    if player:get_player_control().sneak then
+                    -- If shift or aux key is down, delete this block and the wire extension
+                    -- TODO: Remove shift key and only support aux key, because Android really only supports aux
+                    if player:get_player_control().sneak or
+                            player:get_player_control().aux1 then
                         circuit_blocks:delete_wire_extension(block, player)
                     else
                         local wire_extension_itemstack = ItemStack("q_command:wire_extension_block")
@@ -1550,12 +1552,10 @@ function circuit_blocks:register_circuit_block(circuit_node_type,
                         block.get_node_type() == CircuitNodeTypes.BLOCH_SPHERE then
                     local new_node_name = nil
 
-                    -- TODO: Remove
-                    minetest.punch_node(q_command_pos)
+                    -- TODO: Remove?
+                    --minetest.punch_node(q_command_pos)
 
                     if not player:get_player_control().aux1 then
-                        -- TODO: Put back
-                        --[
                         -- Use cat measure textures if measure block is cat-related
                         new_node_name = "circuit_blocks:circuit_blocks_measure_z"
                         if block.get_node_name():sub(1, 47) ==
@@ -1567,12 +1567,6 @@ function circuit_blocks:register_circuit_block(circuit_node_type,
                         end
                         circuit_blocks:set_node_with_circuit_specs_meta(pos,
                                 new_node_name, player)
-                        --]]
-
-                        -- Also indicate that the qasm_simulator should be run, without state tomography
-                        --q_command:get_q_command_block(q_command_pos).set_qasm_simulator_flag(1)
-                        --q_command:get_q_command_block(q_command_pos).set_state_tomography_basis(0)
-                        --minetest.punch_node(q_command_pos)
                     else
                         q_command:get_q_command_block(q_command_pos).set_bloch_present_flag(1)
                         new_node_name = "circuit_blocks:circuit_blocks_qubit_bloch_blank"

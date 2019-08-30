@@ -372,8 +372,10 @@ minetest.register_node("q_command:wire_extension_block", {
 
     end,
     on_punch = function(pos, node, player)
-        -- If shift key is down, delete this block and the wire extension
-        if player:get_player_control().sneak then
+        -- If shift key or aux key is down, delete this block and the wire extension
+        -- TODO: Remove shift key and only support aux key, because Android really only supports aux
+        if player:get_player_control().sneak or
+                player:get_player_control().aux1 then
             local extension_block = wire_extension:get_wire_extension_block(pos)
             local circuit_extension_pos = extension_block:get_circuit_extension_pos()
             local circuit_extension_block = circuit_blocks:get_circuit_block(circuit_extension_pos)

@@ -17,25 +17,19 @@ limitations under the License.
 
 --[[
 TODO:
-[.] Make URL to Qiskit simulators configurable
-[.] Check to make sure (or force) players are in creative mode
-[.] Shorten lines in dialog boxes to 73
-[.] Fix problem of Rx acting like X when placed (finish checking for math.pi radians and
-    correct behavior on X, Y, Z gates)
-[.] Make crosshairs more visible (see https://forum.minetest.net/viewtopic.php?f=5&t=16687)
-[] Right-clicking Q block when circuit exists should produce message like "starting music" and "pausing music"
-[.] Create a mode where measurements (measure block, or Bloch sphere) happen whenever statevector changes
-[.] Don't allow control qubit to be deleted directly
-[.] Don't allow other swap qubit to be deleted directly
-[.] Don't allow other TRACE node to be deleted directly
-
 [] Perhaps allow other swap qubit to be deleted directly, tracking back to the original gate
-[] Fix problem of control qubit erased when it can't be placed becuase of running into
-    another gate. Probably need to add code to on_punch and on_right_click.
-[] Remove debug
-[] Fix PNG issue (and remove XCF files)?
-
-[] Put pointers to IBMQ, IQX (signing up for Q Experience), training, etc. as next steps
+[] Identify debug logging strategy
+[.] Increase time for tools to appear to 30 seconds.
+[.] Make minecarts stay in-world (whitelist in xschem)
+[.] Make sneak code into aux code
+    [] Modify help text to reflect aux key
+    [] Ask "are you sure" before deleting entire circuit?
+[.] Give more Q blocks,
+    [] perhaps earning them by solving puzzles
+[] Automate replacing copper with bronze blocks?
+[] Add link to Minetest Tutorial, and more in-world instructions on getting around Minetest
+[] Copy to OpenQASM and put pointers to running it in IQX
+    - (signing up for Q Experience), training, etc. as next steps
 [] Don't allow bloch sphere blocks to be placed directly?
 [] Check into readonly textarea instead of a table, see
     https://github.com/minetest/minetest/blob/ded5da780002c17f2079a1d8ea09eb923a3b5e8f/doc/lua_api.txt#L2122-L2127.
@@ -132,6 +126,15 @@ TODO:
     • The current measurement blocks could be changed to be Z on one side and X on the other
     • The results blocks could be changed to have a different 'water level' on one side than the other
     This means you'd easily be able to see these two perspectives, just by walking around the circuit. And it would mean that the info for both is available at the same time, so the system and player can easily see when a puzzle is solved
+
+Periodic TODO:
+[] Verify lines in dialog boxes are max 73 chars
+[] Keep used mods updated from https://github.com/minetest-game-mods
+
+Each release TODO if world was modified:
+[] Replace copper blocks with bronze blocks under spinning tools
+    [] Automate this
+[] Run xschemsave & copy two files
 --]]
 
 LOG_DEBUG = false

@@ -815,6 +815,8 @@ minetest.register_on_player_receive_fields(function(player, formname, fields)
             end
             return
         end
+    elseif(formname == "q_block_dialog") then
+        -- TODO: Process fields to be added on that formspec
     end
 end)
 
@@ -878,10 +880,11 @@ function q_command:register_q_command_block(suffix_correct_solution,
         end,
         on_rightclick = function(pos, node, clicker, itemstack)
             local q_block = q_command:get_q_command_block(pos)
+            local player_name = clicker:get_player_name()
+            local formspec = nil
             if not q_block:circuit_grid_exists() then
-                local player_name = clicker:get_player_name()
                 local meta = minetest.get_meta(pos)
-                local formspec = "size[5.0, 4.6]"..
+                formspec = "size[5.0, 4.6]"..
                         "field[1.0,0.5;1.8,1.5;num_wires_str;Wires (max " .. CIRCUIT_MAX_WIRES .. ");2]" ..
                         "field[3.0,0.5;1.8,1.5;num_columns_str;Cols (max " .. CIRCUIT_MAX_COLUMNS .. ");4]" ..
                         --"field[1.0,2.0;1.5,1.5;start_z_offset_str;Forward offset:;0]" ..
@@ -898,6 +901,16 @@ function q_command:register_q_command_block(suffix_correct_solution,
                             "Starting music")
                     mpd.play_song(MUSIC_CHILL)
                 end
+
+                local circuit_block = circuit_blocks:get_circuit_block(q_block.get_circuit_pos())
+                local qasm_with_measurement_str = q_command:compute_circuit(circuit_block, true)
+
+		        formspec = "size[12,7]"..
+                    "textarea[0.3,0.3;12,7;qasm_str;To run on a real quantum computer copy/paste into Circuit Composer at quantum-computing.ibm.com;"..
+                        minetest.formspec_escape(q_command:convert_semicolons(S(qasm_with_measurement_str)))..
+                        "]" ..
+                    "button_exit[4.9,6.5;2,1;close;Close]"
+                minetest.show_formspec(player_name, "q_block_dialog", formspec)
             end
         end,
         on_punch = function(pos, node, player)
@@ -912,7 +925,9 @@ function q_command:register_q_command_block(suffix_correct_solution,
                 local circuit_pos_y = circuit_block.get_circuit_pos().y
                 local circuit_pos_z = circuit_block.get_circuit_pos().z
 
-                if player:get_player_control().sneak then
+                if player:get_player_control().sneak or
+                            player:get_player_control().aux1 then
+                    -- TODO: Remove shift key and only support aux key, because Android really only supports aux
                     -- Delete entire circuit and wire extensions
 
                     for column_num = 1, num_columns do
@@ -1691,7 +1706,9 @@ function q_command:register_q_command_block(suffix_correct_solution,
                 end
 
             else
-                if player:get_player_control().sneak then
+                if player:get_player_control().sneak or
+                            player:get_player_control().aux1 then
+                    -- TODO: Remove shift key and only support aux key, because Android really only supports aux
                     -- Circuit doesn't exist, so just remove the q_block
                     minetest.remove_node(pos)
                 else
@@ -1770,6 +1787,19 @@ function q_command:convert_newlines(str)
 	return convert(str)
 end
 
+function q_command:convert_semicolons(str)
+	if(type(str)~="string") then
+		return "ERROR: No string found!"
+	end
+
+	local function convert(s)
+		return s:gsub(";", function(slash, what)
+			return ";\n"
+		end)
+	end
+
+	return convert(str)
+end
 
 --- Help buttons ---
 function q_command:register_help_button(suffix, caption, fulltext)
@@ -2194,8 +2224,9 @@ continuation to be.
 wide the wire continuation should be.
 
 To remove a wire continuation and its associated Wire Extension block
-from a circuit, while pressing the shift key, left-click the Wire
-Continuation block.
+from a circuit, while pressing the Special key, left-click the Wire
+Continuation block. The Special key may be known, and set, by pausing
+the game and choosing the Change Keys button.
 ]]
 q_command:register_help_button("wire_extender_block_desc", "Wire Extender block", q_command.texts.wire_extender_block_desc)
 
@@ -2227,11 +2258,17 @@ restore the Measurement blocks to their original appearance, rather than
 showing the state of their last measurement.
 
 Right-clicking on a Q block when a circuit has already been created
-stops and starts the music. You may also right-click this non-functional
-Q block to stop or start the music.
+stops and starts the music. It also displays the OpenQASM code for the
+circuit, which you may run on one of the real quantum computers at IBM.
+To do that, copy and paste the OpenQASM code into the Circuit Editor
+pane of the Circuit Composer at https://quantum-computing.ibm.com
 
-To remove a Q block and its circuit, while pressing the shift key
-left-click the Q block.
+Note that you may also right-click this non-functional Q block to stop
+or start the music.
+
+To remove a Q block and its circuit, while pressing the Special key
+left-click the Q block. The Special key may be known, and set, by
+pausing the game and choosing the Change Keys button.
 ]]
 q_command:register_help_button("q_block_desc", "Q block", q_command.texts.q_block_desc)
 
@@ -3102,7 +3139,7 @@ end
 minetest.register_globalstep(function(dtime)
     q_command.game_running_time = q_command.game_running_time + dtime
 
-    if not q_command.tools_placed and q_command.game_running_time > 20 then
+    if not q_command.tools_placed and q_command.game_running_time > 30 then
         local pos_beneath_rotate_tool = {x = 232, y = 8, z = 76}
         local rotate_tool_pos = {x = 232, y = 9, z = 76}
 
@@ -3114,6 +3151,8 @@ minetest.register_globalstep(function(dtime)
 
         local pos_beneath_wire_extension_block = {x = 235, y = 8, z = 78}
         local wire_extension_block_pos = {x = 235, y = 9, z = 78}
+
+        local cart_entity_pos = {x = 230, y = 9, z = 83}
 
         if minetest.get_node(pos_beneath_rotate_tool).name ==
                 "default:copperblock" then
@@ -3146,27 +3185,11 @@ minetest.register_globalstep(function(dtime)
             minetest.item_drop(ItemStack("q_command:wire_extension_block"),
                     nil, wire_extension_block_pos)
             q_command.tools_placed = true
+
+            -- Place a cart entity
+            minetest.add_entity(cart_entity_pos, "carts:cart")
         end
     end
-
-
-	--if not q_command.tools_placed and q_command.game_running_time > 15 then
-    --    minetest.debug("placing tools, q_command.game_running_time: " ..
-    --            tostring(q_command.game_running_time))
-    --
-    --    minetest.dig_node({x = 232, y = 8, z = 76})
-    --    --minetest.set_node({x = 232, y = 8, z = 76}, {name = "default:bronzeblock"})
-    --    minetest.item_drop(ItemStack("circuit_blocks:rotate_tool"),
-    --            nil, {x = 232, y = 9, z = 76})
-    --
-    --    minetest.item_drop(ItemStack("circuit_blocks:control_tool"),
-    --            nil, {x = 232, y = 9, z = 74})
-    --    minetest.item_drop(ItemStack("circuit_blocks:swap_tool"),
-    --            nil, {x = 230, y = 9, z = 72})
-    --    minetest.item_drop(ItemStack("q_command:wire_extension_block"),
-    --            nil, {x = 235, y = 9, z = 78})
-    --   q_command.tools_placed = true
-    --end
 end)
 
 
