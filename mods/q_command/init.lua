@@ -667,7 +667,8 @@ function q_command:create_qasm_for_node(circuit_node_pos, wire_num,
             c_if_table[wire_num] = "if(c" .. register_idx_str .. "==" ..
                     eq_val_str .. ")"
 
-        elseif node_type == CircuitNodeTypes.BLOCH_SPHERE then
+        elseif node_type == CircuitNodeTypes.BLOCH_SPHERE or
+                node_type == CircuitNodeTypes.COLOR_QUBIT then
             if include_measurement_blocks then
                 if tomo_meas_basis == 1 then
                     -- Measure in the X basis (by first rotating -pi/2 radians on Y axis)
@@ -1174,9 +1175,18 @@ function q_command:register_q_command_block(suffix_correct_solution,
 
                         if circuit_node_block then
                             local node_type = circuit_node_block.get_node_type()
-                            local new_node_name = "circuit_blocks:circuit_blocks_qubit_bloch_blank"
+                            local new_node_name_prefix = "circuit_blocks:circuit_blocks_qubit_"
+                            --local new_node_name = "circuit_blocks:circuit_blocks_qubit_bloch_blank"
 
-                            if node_type == CircuitNodeTypes.BLOCH_SPHERE then
+                            if node_type == CircuitNodeTypes.BLOCH_SPHERE or
+                                    node_type == CircuitNodeTypes.COLOR_QUBIT then
+
+                                local new_node_name = "circuit_blocks:circuit_blocks_qubit_bloch_blank"
+                                local qubit_rep_type_str = "bloch"
+                                if node_type == CircuitNodeTypes.COLOR_QUBIT then
+                                    qubit_rep_type_str = "hsv"
+                                end
+
                                 q_block.set_bloch_present_flag(1)
                                 local circuit_dir_str = circuit_node_block.get_circuit_dir_str()
                                 local param2_dir = 0
@@ -1189,7 +1199,8 @@ function q_command:register_q_command_block(suffix_correct_solution,
                                 end
 
                                 if reset then
-                                    new_node_name = "circuit_blocks:circuit_blocks_qubit_bloch_blank"
+                                    new_node_name = "circuit_blocks:circuit_blocks_qubit_" ..
+                                            qubit_rep_type_str .. "_blank"
                                     minetest.swap_node(circuit_node_pos, {name = new_node_name, param2 = param2_dir})
                                 else
                                     local y_pi8rot = 0
@@ -1209,10 +1220,12 @@ function q_command:register_q_command_block(suffix_correct_solution,
                                                 q_block.compute_meas_ket_0_ratio(3, wire_num))
 
                                         if entangled and y_pi8rot and z_pi8rot then
-                                            new_node_name = "circuit_blocks:circuit_blocks_qubit_bloch_entangled"
+                                            new_node_name = "circuit_blocks:circuit_blocks_qubit_" ..
+                                                    qubit_rep_type_str .. "_entangled"
                                             minetest.swap_node(circuit_node_pos, {name = new_node_name, param2 = param2_dir})
                                         elseif y_pi8rot and z_pi8rot then
-                                            new_node_name = "circuit_blocks:circuit_blocks_qubit_bloch_y" ..
+                                            new_node_name = "circuit_blocks:circuit_blocks_qubit_" ..
+                                                    qubit_rep_type_str .. "_y" ..
                                                     y_pi8rot .. "p8_z" .. z_pi8rot .. "p8"
                                             minetest.swap_node(circuit_node_pos, {name = new_node_name, param2 = param2_dir})
                                         else
@@ -1293,7 +1306,7 @@ function q_command:register_q_command_block(suffix_correct_solution,
 
                             local statevector = q_command:parse_json_statevector(sv_data)
 
-                            minetest.debug("statevector:\n" .. dump(statevector))
+                            --minetest.debug("statevector:\n" .. dump(statevector))
 
                             -- minetest.debug("correct_solution_statevector:\n" .. dump(correct_solution_statevector))
 
@@ -1756,12 +1769,25 @@ function q_command:register_basis_state_block(num_qubits, basis_state_num)
     })
 end
 
-function q_command:register_dirac_block(suffix)
-    local texture_name = "q_command_dirac_" .. suffix
-    minetest.register_node("q_command:" .. texture_name, {
-        description = "Dirac " .. suffix,
+
+function q_command:register_dirac_wall_tile(texture_name)
+--    local texture_name = "q_command_dirac_" .. suffix
+    minetest.register_node("q_command:dr_" .. texture_name, {
+        description = "Dirac " .. texture_name,
+	    drawtype = "signlike",
         tiles = {texture_name .. ".png"},
-        paramtype2 = "facedir",
+        inventory_image = texture_name .. ".png",
+        wield_image = texture_name .. ".png",
+        paramtype = "light",
+        paramtype2 = "wallmounted",
+        sunlight_propagates = true,
+        walkable = false,
+        climbable = true,
+        is_ground_content = false,
+        selection_box = {
+            type = "wallmounted"
+        },
+        legacy_wallmounted = true,
         groups = {oddly_breakable_by_hand=2}
     })
 end
@@ -1860,7 +1886,7 @@ function q_command:register_help_button(suffix, caption, fulltext)
 			"button_exit[4.5,5.5;3,1;close;"..minetest.formspec_escape(S("Close")).."]"
 			meta:set_string("formspec", formspec)
 			meta:set_string("infotext", string.format(S("%s (Right-click for hints)"), S(caption)))
-			meta:set_string("id", itemstringpart)
+			--meta:set_string("id", itemstringpart)
 			meta:set_string("caption", caption)
 		end,
 		on_receive_fields = function(pos, formname, fields, sender)
@@ -2146,30 +2172,58 @@ q_command:register_help_button("measurement_z_desc", "Measurement in Z basis", q
 
 q_command.texts.bloch_sphere_block_desc =
 [[
-A Bloch sphere, like these on the wall, represent the quantum state of a
-qubit. Anywhere on the surface of the sphere is a valid quantum state.
+A Bloch sphere, like these on the wall, represents the quantum state of
+a qubit. Anywhere on the surface of the sphere is a valid quantum state.
 For example, the top-left Bloch sphere represents state |0> and the
 bottom-left Bloch sphere represents state |1>. Note that these Bloch
 spheres are rotated slightly clockwise and tilted toward you. The green
 markers represent states on the visible side of a Bloch sphere, and the
 blue markers represent states on its hidden side.
 
-To make measurements for state tomography, right-click the Bloch sphere
-block while holding down the Special key. The Special key may be known,
-and set, by pausing the game and choosing the Change Keys button. To
-make a measurement in the Z basis and display the measured basis state,
-right-click the Bloch sphere block without holding down other keys.
+While wielding a Bloch sphere block, right-click to place it on a
+quantum circuit.
 
-Note that the Bloch sphere block is only available by right-clicking a
-Measurement block while holding down the Special key. Whenever a Bloch
-sphere is on a circuit, the QASM simulator will automatically be run
-whenever the any changes to the circuit occur.
+The Bloch sphere blocks use state tomography, making measurements in the
+X, Y and Z bases. To make a measurement only in the Z basis and display
+the measured basis state, right-click the Bloch sphere block.
+
+Whenever a Bloch sphere block is on a circuit, the QASM simulator will
+automatically be run whenever any changes to the circuit occur.
 
 To remove a Bloch sphere block, or any other block from a circuit,
 left-click it while wielding a block (or empty-handed if you are close
 enough).
 ]]
 q_command:register_help_button("bloch_sphere_block_desc", "The Bloch sphere", q_command.texts.bloch_sphere_block_desc)
+
+
+q_command.texts.hsv_color_qubit_block_desc =
+[[
+An HSV color block, like these on the wall, represent the quantum state
+of a qubit. For example, the top HSV color block represents state |0>
+and the bottom HSV color block represents state |1>. This method of
+representing qubit states with HSV color was invented by Maddy Tod.
+
+While wielding an HSV color block (noted by the letters HSV in a ket
+symbol as seen on the wall), right-click to place it on a quantum
+circuit.
+
+To make a measurement in the Z basis and display the measured basis
+state, right-click the HSV color block.
+
+The HSV color blocks use state tomography, making measurements in the
+X, Y and Z bases. To make a measurement only in the Z basis and display
+the measured basis state, right-click the HSV color block.
+
+Whenever an HSV color block is on a circuit, the QASM simulator will
+automatically be run whenever any changes to the circuit occur.
+
+To remove an HSV color block, or any other block from a circuit,
+left-click it while wielding a block (or empty-handed if you are close
+enough).
+]]
+q_command:register_help_button("hsv_color_qubit_block_desc", "The HSV color block",
+        q_command.texts.hsv_color_qubit_block_desc)
 
 
 q_command.texts.reset_op_desc =
@@ -2400,6 +2454,11 @@ q_command:register_q_command_block("default")
 
 q_command.texts.x_gate =
 [[
+TLDR: Get an X block from chest and place on the circuit, making the
+blue liquid levels correspond to a quantum state of |1>. Measure circuit
+several times for good measure :-)
+----
+
 This circuit, consisting of only one wire, leverages the X gate, also
 known as the Pauli-X, NOT, or bit-flip, gate. Its effect on the |0>
 state is to make it |1>, and vice-versa. To work through this puzzle,
@@ -2440,8 +2499,145 @@ q_command:register_q_command_block( "x_gate_success", "x_gate",
         solution_statevector_x_gate, false, {x = 236, y = 0, z = 67})
 
 
+q_command.texts.x_gates_2_wire =
+[[
+TLDR: Using only X gates, make the blue liquid levels correspond to a
+quantum state of |10>. Measure the circuit several times as extra
+validation of the correct solution.
+----
+
+This circuit, consisting of two wires, demonstrates that one or more X
+gates may be leveraged to create a classical state. To work through this
+puzzle, take the following steps:
+
+1) Notice that the blue liquid indicates there is a 100% probability
+that the result will be |00> when the circuit is measured. Go ahead and
+right-click the measurement block several times to verify that |00> is
+always the result.
+
+2) Get an X block out of the chest.
+
+3) While wielding the X block, position the cursor on the circuit wire
+corresponding to each |1> qubit in the desired measurement result, and
+right-click. Note that the bottom-most wire corresponds to the left-most
+qubit.
+
+4) Notice that the blue liquid now indicates there is a 100% probability
+that the result will be |10> when the circuit is measured. Go ahead and
+right-click the measurement block several times to verify that |10> is
+always the result.
+
+If the Q block turned gold, congratulations on solving the puzzle!
+]]
+q_command:register_help_button("x_gates_2_wire", "Classical 2 bit state with X gates",
+        q_command.texts.x_gates_2_wire)
+local solution_statevector_x_gates_2_wire =
+{
+	{
+		r = 0,
+		i = 0
+	},
+	{
+		r = 0,
+		i = 0
+	},
+	{
+		r = 1,
+		i = 0
+	},
+	{
+		r = 0,
+		i = 0
+	}
+}
+q_command:register_q_command_block( "x_gates_2_wire_success",
+        "x_gates_2_wire",
+        solution_statevector_x_gates_2_wire, true, {x = 243, y = 0, z = 60})
+q_command:register_q_command_block( "x_gates_2_wire_success", "x_gates_2_wire",
+        solution_statevector_x_gates_2_wire, false, {x = 243, y = 0, z = 60})
+
+
+q_command.texts.x_gates_3_wire =
+[[
+TLDR: Using only X gates, make the blue liquid levels correspond to a
+quantum state of |011>. Measure the circuit several times as extra
+validation of the correct solution.
+----
+
+This circuit, consisting of three wires, demonstrates that one or more X
+gates may be leveraged to create a classical state. To work through this
+puzzle, take the following steps:
+
+1) Notice that the blue liquid indicates there is a 100% probability
+that the result will be |000> when the circuit is measured. Go ahead and
+right-click the measurement block several times to verify that |000> is
+always the result.
+
+2) Get an X block out of the chest.
+
+3) While wielding the X block, position the cursor on the circuit wire
+corresponding to each |1> qubit in the desired measurement result, and
+right-click. Note that the bottom-most wire corresponds to the left-most
+qubit.
+
+4) Notice that the blue liquid now indicates there is a 100% probability
+that the result will be |011> when the circuit is measured. Go ahead and
+right-click the measurement block several times to verify that |011> is
+always the result.
+
+If the Q block turned gold, congratulations on solving the puzzle!
+]]
+q_command:register_help_button("x_gates_3_wire", "Classical 3 bit state with X gates",
+        q_command.texts.x_gates_3_wire)
+local solution_statevector_x_gates_3_wire =
+{
+	{
+		r = 0,
+		i = 0
+	},
+	{
+		r = 0,
+		i = 0
+	},
+	{
+		r = 0,
+		i = 0
+	},
+	{
+		r = 1,
+		i = 0
+	},
+	{
+		r = 0,
+		i = 0
+	},
+	{
+		r = 0,
+		i = 0
+	},
+	{
+		r = 0,
+		i = 0
+	},
+	{
+		r = 0,
+		i = 0
+	}
+}
+q_command:register_q_command_block( "x_gates_3_wire_success",
+        "x_gates_3_wire",
+        solution_statevector_x_gates_3_wire, true, {x = 250, y = 0, z = 67})
+q_command:register_q_command_block( "x_gates_3_wire_success", "x_gates_3_wire",
+        solution_statevector_x_gates_3_wire, false, {x = 250, y = 0, z = 67})
+
+
 q_command.texts.h_gate =
 [[
+TLDR: Using only an H gate, make the blue liquid levels correspond to a
+quantum state of sqrt(1/2) |0> + sqrt(1/2) |1>. Measure the circuit
+several times as extra validation of the correct solution.
+----
+
 This circuit, consisting of only one wire, leverages the H gate, also
 known as the the Hadamard gate. Its effect on the |0> state is to put it
 into an equal superposition of |0> and |1>. Therefore, when the qubit is
@@ -2480,9 +2676,9 @@ local solution_statevector_h_gate =
 	}
 }
 q_command:register_q_command_block( "h_gate_success", "h_gate",
-        solution_statevector_h_gate, true, {x = 243, y = 0, z = 60})
+        solution_statevector_h_gate, true, {x = 253, y = 0, z = 70})
 q_command:register_q_command_block( "h_gate_success", "h_gate",
-        solution_statevector_h_gate, false, {x = 243, y = 0, z = 60})
+        solution_statevector_h_gate, false, {x = 253, y = 0, z = 70})
 
 
 q_command.texts.cnot_gate_puzzle =
@@ -2542,9 +2738,9 @@ local solution_statevector_cnot_gate_puzzle =
 	}
 }
 q_command:register_q_command_block( "cnot_gate_puzzle_success", "cnot_gate_puzzle",
-        solution_statevector_cnot_gate_puzzle, true, {x = 253, y = 0, z = 70})
+        solution_statevector_cnot_gate_puzzle, true, {x = 0, y = 0, z = 0})
 q_command:register_q_command_block( "cnot_gate_puzzle_success", "cnot_gate_puzzle",
-        solution_statevector_cnot_gate_puzzle, false, {x = 253, y = 0, z = 70})
+        solution_statevector_cnot_gate_puzzle, false, {x = 0, y = 0, z = 0})
 
 
 q_command.texts.hxx_gates =
@@ -2891,9 +3087,9 @@ local solution_statevector_equal_super_2wire =
 	}
 }
 q_command:register_q_command_block( "equal_super_2wire_success", "equal_super_2wire",
-        solution_statevector_equal_super_2wire, true, {x = 250, y = 0, z = 67})
+        solution_statevector_equal_super_2wire, true, {x = 0, y = 0, z = 0})
 q_command:register_q_command_block( "equal_super_2wire_success", "equal_super_2wire",
-        solution_statevector_equal_super_2wire, false, {x = 250, y = 0, z = 67})
+        solution_statevector_equal_super_2wire, false, {x = 0, y = 0, z = 0})
 
 
 q_command.texts.rotate_yz_gates_puzzle =
@@ -2905,35 +3101,26 @@ this puzzle, take the following steps:
 
 1) Place an Ry gate on first column of the top wire.
 
-2) Turn the Measurement block on the top wire into a Bloch sphere that
-displays an estimation of the qubit state before measurement. To
-accomplish this, right-click the Measurement block while holding down
-the Special key. This will insert state tomography measurements into the
-circuit, calculating and displaying the estimated state. The Special key
-may be known, and set, by pausing the game and choosing the Change Keys
-button.
+2) The Bloch sphere on the top wire should have a green square at its
+top, reflecting that the state of the qubit is |0>. While wielding the
+Rotate Tool (the rounded tool), left-click the Ry gate 8 times, pausing
+a couple of seconds each time. Each click performs a rotation of π/16
+radians (11.25 degrees). Notice that the state represented on the Bloch
+sphere changes, moving along a curved vertical line and ending up on its
+equator. The state that should be reflected on the Bloch sphere is
+commonly referred to as the plus, or |+> state.
 
-3) The Bloch sphere should have a green square at its top, reflecting
-that the state of the qubit is |0>. While wielding the Rotate Tool (the
-rounded tool), left-click the Ry gate 8 times, pausing a couple of
-seconds each time. Each click performs a rotation of π/16 radians (11.25
-degrees). Notice that the state represented on the Bloch sphere changes,
-moving along a curved vertical line and ending up on its equator. The
-state that should be reflected on the Bloch sphere is commonly referred
-to as the plus, or |+> state.
-
-4) Place a Z gate on the second column of the top wire. Notice that the
+3) Place a Z gate on the second column of the top wire. Notice that the
 state represented on the Bloch sphere changes again, rotating π radians
 (180 degrees) around the Z axis. Its color changes to blue, indicating
 that it is located on the back side of the sphere. This state is
 commonly referred to as the minus, or |-> state.
 
-5) Turn the Measurement block on the bottom wire into a Bloch sphere.
-Then place an X gate on the first column of the bottom wire. Note that
+4) Place an X gate on the first column of the bottom wire. Note that
 the state of that qubit rotates π radians (180 degrees) around the X
 axis from the top to the bottom of the Bloch sphere.
 
-6) Place a Hadamard gate on the second column of the bottom wire. Note
+5) Place a Hadamard gate on the second column of the bottom wire. Note
 that the state reflected on the Bloch sphere is the same as the qubit on
 the top wire. This demonstrates that there are many combinations
 (actually an infinite number) of gate operations that can arrive at the
@@ -3106,6 +3293,14 @@ minetest.register_on_joinplayer(function(player)
 	if(formspec~=nil) then
 		minetest.show_formspec(player:get_player_name(), "intro", formspec)
 	end
+
+    --[[
+    TODO: Put back in somewhere
+    local inv = player:get_inventory()
+    local inv_main_size = inv:get_size("main")
+    inv:set_size("main", 0)
+    inv:set_size("main", inv_main_size)
+    --]]
 end)
 
 
@@ -3197,18 +3392,56 @@ for idx = 0, ROTATION_RESOLUTION do
     q_command:register_statevector_liquid_block(idx)
 end
 
-q_command:register_dirac_block("vert")
-q_command:register_dirac_block("rangle")
-q_command:register_dirac_block("rangle_plus")
-q_command:register_dirac_block("rangle_minus")
-q_command:register_dirac_block("rangle_space_vert")
-q_command:register_dirac_block("rangle_plus_vert")
-q_command:register_dirac_block("rangle_minus_vert")
---q_command:register_dirac_block("sqrt")
-q_command:register_dirac_block("sqrt_1_2")
---q_command:register_dirac_block("sqrt_1_4")
-q_command:register_dirac_block("sqrt_1_2_vert")
-q_command:register_dirac_block("sqrt_1_4_vert")
+q_command:register_dirac_wall_tile("q_command_dirac_blank")
+q_command:register_dirac_wall_tile("q_command_dirac_vert")
+q_command:register_dirac_wall_tile("q_command_dirac_rangle")
+q_command:register_dirac_wall_tile("q_command_dirac_plus")
+q_command:register_dirac_wall_tile("q_command_dirac_minus")
+q_command:register_dirac_wall_tile("q_command_dirac_rangle_plus")
+q_command:register_dirac_wall_tile("q_command_dirac_rangle_minus")
+q_command:register_dirac_wall_tile("q_command_dirac_rangle_space_vert")
+q_command:register_dirac_wall_tile("q_command_dirac_rangle_plus_vert")
+q_command:register_dirac_wall_tile("q_command_dirac_rangle_minus_vert")
+--q_command:register_dirac_wall_tile("sqrt")
+q_command:register_dirac_wall_tile("q_command_dirac_sqrt_1_2")
+q_command:register_dirac_wall_tile("q_command_dirac_sqrt_1_4")
+q_command:register_dirac_wall_tile("q_command_dirac_sqrt_1_2_vert")
+q_command:register_dirac_wall_tile("q_command_dirac_sqrt_1_4_vert")
+
+q_command:register_dirac_wall_tile("q_command_state_1qb_0")
+q_command:register_dirac_wall_tile("q_command_state_1qb_1")
+
+q_command:register_dirac_wall_tile("q_command_state_2qb_0")
+q_command:register_dirac_wall_tile("q_command_state_2qb_1")
+q_command:register_dirac_wall_tile("q_command_state_2qb_2")
+q_command:register_dirac_wall_tile("q_command_state_2qb_3")
+
+q_command:register_dirac_wall_tile("q_command_state_3qb_0")
+q_command:register_dirac_wall_tile("q_command_state_3qb_1")
+q_command:register_dirac_wall_tile("q_command_state_3qb_2")
+q_command:register_dirac_wall_tile("q_command_state_3qb_3")
+q_command:register_dirac_wall_tile("q_command_state_3qb_4")
+q_command:register_dirac_wall_tile("q_command_state_3qb_5")
+q_command:register_dirac_wall_tile("q_command_state_3qb_6")
+q_command:register_dirac_wall_tile("q_command_state_3qb_7")
+
+q_command:register_dirac_wall_tile("q_command_state_4qb_0")
+q_command:register_dirac_wall_tile("q_command_state_4qb_1")
+q_command:register_dirac_wall_tile("q_command_state_4qb_2")
+q_command:register_dirac_wall_tile("q_command_state_4qb_3")
+q_command:register_dirac_wall_tile("q_command_state_4qb_4")
+q_command:register_dirac_wall_tile("q_command_state_4qb_5")
+q_command:register_dirac_wall_tile("q_command_state_4qb_6")
+q_command:register_dirac_wall_tile("q_command_state_4qb_7")
+q_command:register_dirac_wall_tile("q_command_state_4qb_8")
+q_command:register_dirac_wall_tile("q_command_state_4qb_9")
+q_command:register_dirac_wall_tile("q_command_state_4qb_10")
+q_command:register_dirac_wall_tile("q_command_state_4qb_11")
+q_command:register_dirac_wall_tile("q_command_state_4qb_12")
+q_command:register_dirac_wall_tile("q_command_state_4qb_13")
+q_command:register_dirac_wall_tile("q_command_state_4qb_14")
+q_command:register_dirac_wall_tile("q_command_state_4qb_15")
+
 
 minetest.register_globalstep(function(dtime)
     q_command.game_running_time = q_command.game_running_time + dtime
