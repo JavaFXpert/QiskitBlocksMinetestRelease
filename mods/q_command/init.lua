@@ -1306,7 +1306,7 @@ function q_command:register_q_command_block(suffix_correct_solution,
 
                             local statevector = q_command:parse_json_statevector(sv_data)
 
-                            --minetest.debug("statevector:\n" .. dump(statevector))
+                            minetest.debug("statevector:\n" .. dump(statevector))
 
                             -- minetest.debug("correct_solution_statevector:\n" .. dump(correct_solution_statevector))
 
@@ -1770,7 +1770,7 @@ function q_command:register_basis_state_block(num_qubits, basis_state_num)
 end
 
 
-function q_command:register_dirac_wall_tile(texture_name)
+function q_command:register_wall_tile(texture_name)
 --    local texture_name = "q_command_dirac_" .. suffix
     minetest.register_node("q_command:dr_" .. texture_name, {
         description = "Dirac " .. texture_name,
@@ -1941,9 +1941,13 @@ the front doors into the woods.
 
 If you would rather skip the cats, then a good place to begin your
 journey would be in the quantum circuit garden on the other side of the
-large wall outside the front doors. Wherever you choose to begin, please
-be sure to right-click the Help buttons (labeled with a question mark)
-as you encounter them.
+large wall outside the front doors.
+
+If want an escape room-like experience, check out the puzzle rooms at
+the bottom of the ladder located in this building.
+
+Wherever you choose to begin, please be sure to right-click the Help
+buttons (labeled with a question mark) as you encounter them.
 
 Wherever you go, remember that the sun may eventually set for a while.
 To skip a night-cycle, just right-click a nearby bed and you will
@@ -2681,6 +2685,105 @@ q_command:register_q_command_block( "h_gate_success", "h_gate",
         solution_statevector_h_gate, false, {x = 253, y = 0, z = 70})
 
 
+q_command.texts.h_x_gate =
+[[
+TLDR: Using only H and X gates, make the blue liquid levels correspond
+to a quantum state of sqrt(1/2) |0> - sqrt(1/2) |1>. Measure the circuit
+several times as extra validation of the correct solution.
+----
+
+This circuit, consisting of only one wire, demonstrates that the order
+of gates on a wire often matters. It also show that the basis states in
+a quantum state may have different phases. To work through this puzzle,
+take the following steps:
+
+1) Notice that the blue liquid indicates there is a 100% probability
+that the result will be |0> when the circuit is measured. Go ahead and
+right-click the measurement block several times to verify that |0> is
+always the result.
+
+2) Get an H block and an X block out of the chest, placing both on the
+circuit.
+
+3) The solution will have probabilities indicating that measurement
+results |0> and |1> are equally likely, as well has having opposite
+phases. The notation for a phase on these block-world circuits is an
+arrow that points in a direction signifying its counterclockwise
+rotation, from 0 radians pointing rightward. As an example, a leftward
+pointing arrow signifies a phase of pi radians.
+
+4) The blue liquid should indicate there is a 50% probability that the
+result will be |0> when the circuit is measured, and a 50% probability
+that the result will be |1> when the circuit is measured. Go ahead and
+right-click the measurement block several times to verify that the
+results are fairly evenly distributed between |0> and |1>.
+
+If the Q block turned gold, congratulations on solving the puzzle!
+]]
+q_command:register_help_button("h_x_gate", "H and X gates", q_command.texts.h_x_gate)
+local solution_statevector_h_x_gate =
+{
+	{
+		r = 0.707,
+		i = 0
+	},
+	{
+		r = -0.707,
+		i = 0
+	}
+}
+q_command:register_q_command_block( "h_x_gate_success", "h_x_gate",
+        solution_statevector_h_x_gate, true, {x = 256, y = 0, z = 67})
+q_command:register_q_command_block( "h_x_gate_success", "h_x_gate",
+        solution_statevector_h_x_gate, false, {x = 256, y = 0, z = 67})
+
+
+q_command.texts.h_z_gate =
+[[
+TLDR: Using only H and Z gates, make the blue liquid levels correspond
+to a quantum state of sqrt(1/2) |0> - sqrt(1/2) |1>. Notice how the
+Bloch sphere reflects the state of the qubit as gates are placed.
+----
+
+This circuit, consisting of only one wire, demonstrates how a block
+sphere models the state of a qubit. To work through this puzzle, take
+the following steps:
+
+1) Notice that instead of the usual measurement block, this circuit has
+a (very pixelated) Bloch sphere. You can read more about this Bloch
+sphere in the building you started in when first playing this game.
+
+2) Get an H block and a Z block out of the chest, placing them on the
+circuit. As you place each one, notice how the Bloch sphere changes,
+reflecting the updated state of the qubit. Try placing them in a
+different order, noticing the effects on the Bloch sphere and liquid
+blocks.
+
+3) The solution will have probabilities indicating that measurement
+results |0> and |1> are equally likely, as well has having opposite
+phases. Note that both the Bloch sphere, and the blue liquid blocks,
+reflect these probabilities and phases.
+
+If the Q block turned gold, congratulations on solving the puzzle!
+]]
+q_command:register_help_button("h_z_gate", "H and Z gates", q_command.texts.h_z_gate)
+local solution_statevector_h_z_gate =
+{
+	{
+		r = 0.707,
+		i = 0
+	},
+	{
+		r = -0.707,
+		i = 0
+	}
+}
+q_command:register_q_command_block( "h_z_gate_success", "h_z_gate",
+        solution_statevector_h_z_gate, true, {x = 263, y = 0, z = 60})
+q_command:register_q_command_block( "h_z_gate_success", "h_z_gate",
+        solution_statevector_h_z_gate, false, {x = 263, y = 0, z = 60})
+
+
 q_command.texts.cnot_gate_puzzle =
 [[
 The CNOT gate, also referred to as the controlled-NOT or controlled-X
@@ -2745,6 +2848,10 @@ q_command:register_q_command_block( "cnot_gate_puzzle_success", "cnot_gate_puzzl
 
 q_command.texts.hxx_gates =
 [[
+TLDR: Using only H and X gates, make the blue liquid levels correspond
+to a quantum state of sqrt(1/2) |001> + sqrt(1/2) |101>.
+----
+
 This circuit leverages Hadamard and X gates to create a quantum state in
 which the measurement results |001> and |101> are equally likely, and no
 other measurement results are possible. This quantum state could be
@@ -2758,7 +2865,7 @@ gates on single-wire circuits.
 
 If the Q block turned gold, congratulations on solving the puzzle!
 ]]
-q_command:register_help_button("hxx_gates", "Hadamard and X gates", q_command.texts.hxx_gates)
+q_command:register_help_button("hxx_gates", "Hadamard and X gates 3 wires", q_command.texts.hxx_gates)
 local solution_statevector_hxx_gates =
 {
 	{
@@ -2795,9 +2902,9 @@ local solution_statevector_hxx_gates =
 	}
 }
 q_command:register_q_command_block( "hxx_gates_success", "hxx_gates",
-        solution_statevector_hxx_gates, true)
+        solution_statevector_hxx_gates, true, {x = 266, y = 0, z = 67})
 q_command:register_q_command_block( "hxx_gates_success", "hxx_gates",
-        solution_statevector_hxx_gates, false)
+        solution_statevector_hxx_gates, false, {x = 266, y = 0, z = 67})
 
 
 q_command.texts.bell_phi_plus =
@@ -3056,6 +3163,11 @@ q_command:register_q_command_block( "ghz_state_success", "ghz_state",
 
 q_command.texts.equal_super_2wire =
 [[
+TLDR: Using only H gates, make the blue liquid levels correspond to the
+following quantum state, commonly referred to as an equal superposition:
+sqrt(1/4) |00> + sqrt(1/4) |01> + sqrt(1/4) |10> + sqrt(1/4) |11>
+----
+
 This circuit leverages two Hadamard gates to create an equal
 superposition of |00>, |01>, |10>, and |11>. To solve this circuit
 puzzle, place an H block on each wire. Notice how the outcome
@@ -3087,9 +3199,9 @@ local solution_statevector_equal_super_2wire =
 	}
 }
 q_command:register_q_command_block( "equal_super_2wire_success", "equal_super_2wire",
-        solution_statevector_equal_super_2wire, true, {x = 0, y = 0, z = 0})
+        solution_statevector_equal_super_2wire, true, {x = 270, y = 0, z = 77})
 q_command:register_q_command_block( "equal_super_2wire_success", "equal_super_2wire",
-        solution_statevector_equal_super_2wire, false, {x = 0, y = 0, z = 0})
+        solution_statevector_equal_super_2wire, false, {x = 270, y = 0, z = 77})
 
 
 q_command.texts.rotate_yz_gates_puzzle =
@@ -3392,61 +3504,71 @@ for idx = 0, ROTATION_RESOLUTION do
     q_command:register_statevector_liquid_block(idx)
 end
 
-q_command:register_dirac_wall_tile("q_command_dirac_blank")
-q_command:register_dirac_wall_tile("q_command_dirac_vert")
-q_command:register_dirac_wall_tile("q_command_dirac_rangle")
-q_command:register_dirac_wall_tile("q_command_dirac_plus")
-q_command:register_dirac_wall_tile("q_command_dirac_minus")
-q_command:register_dirac_wall_tile("q_command_dirac_rangle_plus")
-q_command:register_dirac_wall_tile("q_command_dirac_rangle_minus")
-q_command:register_dirac_wall_tile("q_command_dirac_rangle_space_vert")
-q_command:register_dirac_wall_tile("q_command_dirac_rangle_plus_vert")
-q_command:register_dirac_wall_tile("q_command_dirac_rangle_minus_vert")
---q_command:register_dirac_wall_tile("sqrt")
-q_command:register_dirac_wall_tile("q_command_dirac_sqrt_1_2")
-q_command:register_dirac_wall_tile("q_command_dirac_sqrt_1_4")
-q_command:register_dirac_wall_tile("q_command_dirac_sqrt_1_2_vert")
-q_command:register_dirac_wall_tile("q_command_dirac_sqrt_1_4_vert")
+q_command:register_wall_tile("q_command_dirac_blank")
+q_command:register_wall_tile("q_command_dirac_vert")
+q_command:register_wall_tile("q_command_dirac_rangle")
+q_command:register_wall_tile("q_command_dirac_plus")
+q_command:register_wall_tile("q_command_dirac_minus")
+q_command:register_wall_tile("q_command_dirac_rangle_plus")
+q_command:register_wall_tile("q_command_dirac_rangle_minus")
+q_command:register_wall_tile("q_command_dirac_rangle_space_vert")
+q_command:register_wall_tile("q_command_dirac_rangle_plus_vert")
+q_command:register_wall_tile("q_command_dirac_rangle_minus_vert")
+--q_command:register_wall_tile("sqrt")
+q_command:register_wall_tile("q_command_dirac_sqrt_1_2")
+q_command:register_wall_tile("q_command_dirac_sqrt_1_4")
+q_command:register_wall_tile("q_command_dirac_sqrt_1_2_vert")
+q_command:register_wall_tile("q_command_dirac_sqrt_1_4_vert")
 
-q_command:register_dirac_wall_tile("q_command_state_1qb_0")
-q_command:register_dirac_wall_tile("q_command_state_1qb_1")
+q_command:register_wall_tile("q_command_state_1qb_0")
+q_command:register_wall_tile("q_command_state_1qb_1")
 
-q_command:register_dirac_wall_tile("q_command_state_2qb_0")
-q_command:register_dirac_wall_tile("q_command_state_2qb_1")
-q_command:register_dirac_wall_tile("q_command_state_2qb_2")
-q_command:register_dirac_wall_tile("q_command_state_2qb_3")
+q_command:register_wall_tile("q_command_state_2qb_0")
+q_command:register_wall_tile("q_command_state_2qb_1")
+q_command:register_wall_tile("q_command_state_2qb_2")
+q_command:register_wall_tile("q_command_state_2qb_3")
 
-q_command:register_dirac_wall_tile("q_command_state_3qb_0")
-q_command:register_dirac_wall_tile("q_command_state_3qb_1")
-q_command:register_dirac_wall_tile("q_command_state_3qb_2")
-q_command:register_dirac_wall_tile("q_command_state_3qb_3")
-q_command:register_dirac_wall_tile("q_command_state_3qb_4")
-q_command:register_dirac_wall_tile("q_command_state_3qb_5")
-q_command:register_dirac_wall_tile("q_command_state_3qb_6")
-q_command:register_dirac_wall_tile("q_command_state_3qb_7")
+q_command:register_wall_tile("q_command_state_3qb_0")
+q_command:register_wall_tile("q_command_state_3qb_1")
+q_command:register_wall_tile("q_command_state_3qb_2")
+q_command:register_wall_tile("q_command_state_3qb_3")
+q_command:register_wall_tile("q_command_state_3qb_4")
+q_command:register_wall_tile("q_command_state_3qb_5")
+q_command:register_wall_tile("q_command_state_3qb_6")
+q_command:register_wall_tile("q_command_state_3qb_7")
 
-q_command:register_dirac_wall_tile("q_command_state_4qb_0")
-q_command:register_dirac_wall_tile("q_command_state_4qb_1")
-q_command:register_dirac_wall_tile("q_command_state_4qb_2")
-q_command:register_dirac_wall_tile("q_command_state_4qb_3")
-q_command:register_dirac_wall_tile("q_command_state_4qb_4")
-q_command:register_dirac_wall_tile("q_command_state_4qb_5")
-q_command:register_dirac_wall_tile("q_command_state_4qb_6")
-q_command:register_dirac_wall_tile("q_command_state_4qb_7")
-q_command:register_dirac_wall_tile("q_command_state_4qb_8")
-q_command:register_dirac_wall_tile("q_command_state_4qb_9")
-q_command:register_dirac_wall_tile("q_command_state_4qb_10")
-q_command:register_dirac_wall_tile("q_command_state_4qb_11")
-q_command:register_dirac_wall_tile("q_command_state_4qb_12")
-q_command:register_dirac_wall_tile("q_command_state_4qb_13")
-q_command:register_dirac_wall_tile("q_command_state_4qb_14")
-q_command:register_dirac_wall_tile("q_command_state_4qb_15")
+q_command:register_wall_tile("q_command_state_4qb_0")
+q_command:register_wall_tile("q_command_state_4qb_1")
+q_command:register_wall_tile("q_command_state_4qb_2")
+q_command:register_wall_tile("q_command_state_4qb_3")
+q_command:register_wall_tile("q_command_state_4qb_4")
+q_command:register_wall_tile("q_command_state_4qb_5")
+q_command:register_wall_tile("q_command_state_4qb_6")
+q_command:register_wall_tile("q_command_state_4qb_7")
+q_command:register_wall_tile("q_command_state_4qb_8")
+q_command:register_wall_tile("q_command_state_4qb_9")
+q_command:register_wall_tile("q_command_state_4qb_10")
+q_command:register_wall_tile("q_command_state_4qb_11")
+q_command:register_wall_tile("q_command_state_4qb_12")
+q_command:register_wall_tile("q_command_state_4qb_13")
+q_command:register_wall_tile("q_command_state_4qb_14")
+q_command:register_wall_tile("q_command_state_4qb_15")
+
+q_command:register_wall_tile("q_command_esc_room_exit_wall_tile")
+q_command:register_wall_tile("q_command_bloch_minus_state_wall_tile")
+
+local NUM_ESCAPE_ROOMS = 16
+for idx = 1, NUM_ESCAPE_ROOMS do
+    q_command:register_wall_tile("q_command_esc_room_" .. tostring(idx) .. "_16")
+end
+
+
 
 
 minetest.register_globalstep(function(dtime)
     q_command.game_running_time = q_command.game_running_time + dtime
 
-    if not q_command.tools_placed and q_command.game_running_time > 30 then
+    if not q_command.tools_placed and q_command.game_running_time > 60 then
         local pos_beneath_rotate_tool = {x = 232, y = 8, z = 76}
         local rotate_tool_pos = {x = 232, y = 9, z = 76}
 
