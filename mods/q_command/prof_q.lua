@@ -114,7 +114,7 @@ prof_q.areas.h_x_gate = {}
 prof_q.areas.h_x_gate.center_pos = {x = 258, y = 0, z = 72}
 prof_q.areas.h_x_gate.radius = 5
 prof_q.areas.h_x_gate.help_chat_msg = {
-	"Now lets visit the back side of the Bloch sphere, in a state commonly known as |->",
+	"Now let's visit the back side of the Bloch sphere, in a state commonly known as |->",
 	"(where measurements resulting in |0> or |1> are also equally likely)"
 }
 prof_q.areas.h_x_gate.help_success_msg = {
@@ -134,10 +134,14 @@ prof_q.areas.h_z_gate = {}
 prof_q.areas.h_z_gate.center_pos = {x = 258, y = 0, z = 62}
 prof_q.areas.h_z_gate.radius = 5
 prof_q.areas.h_z_gate.help_chat_msg = {
-	"Welcome to this h_z_gate circuit puzzle!"
+	"Let's take another trip to the |-> state, but this time via a different route."
 }
 prof_q.areas.h_z_gate.help_success_msg = {
-	"h_z_gate Congratulations!"
+	"I like how you've demonstrated that there several (an infinite number of) ways for a quantum",
+	"state to evolve to a different quantum state. This time, you used the H gate to move to the",
+	"|+> state, and then you changed the phase of the quantum state by pi radians, using the Z gate",
+	"to rotate around the Z axis. You may have noticed that the arrows in the liquid blocks point",
+	"in opposite directions (pi radians out of phase) when this one-qubit circuit is in the |-> state."
 }
 prof_q.areas.h_z_gate.help_chat_sent = false
 prof_q.areas.h_z_gate.success_chat_sent = false
@@ -149,10 +153,11 @@ prof_q.areas.hxx_gates_escape = {}
 prof_q.areas.hxx_gates_escape.center_pos = {x = 268, y = 0, z = 62}
 prof_q.areas.hxx_gates_escape.radius = 5
 prof_q.areas.hxx_gates_escape.help_chat_msg = {
-	"Welcome to this hxx_gates_escape circuit puzzle!"
+	"Go ahead and solve this puzzle by thinking about one wire at a time"
 }
 prof_q.areas.hxx_gates_escape.help_success_msg = {
-	"hxx_gates_escape Congratulations!"
+	"You're really getting the hang of this! By thinking about the effects of various gates on",
+	"individual wires, you've successfully crafted the desired composite quantum state."
 }
 prof_q.areas.hxx_gates_escape.help_chat_sent = false
 prof_q.areas.hxx_gates_escape.success_chat_sent = false
@@ -164,10 +169,14 @@ prof_q.areas.equal_super_2wire_escape = {}
 prof_q.areas.equal_super_2wire_escape.center_pos = {x = 268, y = 0, z = 72}
 prof_q.areas.equal_super_2wire_escape.radius = 5
 prof_q.areas.equal_super_2wire_escape.help_chat_msg = {
-	"Welcome to this equal_super_2wire_escape circuit puzzle!"
+	"Now put four basis states into equal superpositions"
 }
 prof_q.areas.equal_super_2wire_escape.help_success_msg = {
-	"equal_super_2wire_escape Congratulations!"
+	"Nicely done! By putting each wire in a superposition, you've caused all four of the",
+	"basis states in this quantum state to be in equal superpositions. As indicated by the",
+	"formula on the wall, each state has a 1/4 probability of being the result when measured.",
+	"Note that the measurement probability of a given basis state is the square of its",
+	"co-efficient (referred to by physicists as its amplitude)"
 }
 prof_q.areas.equal_super_2wire_escape.help_chat_sent = false
 prof_q.areas.equal_super_2wire_escape.success_chat_sent = false
@@ -179,10 +188,12 @@ prof_q.areas.equal_super_3wire_escape = {}
 prof_q.areas.equal_super_3wire_escape.center_pos = {x = 268, y = 0, z = 82}
 prof_q.areas.equal_super_3wire_escape.radius = 5
 prof_q.areas.equal_super_3wire_escape.help_chat_msg = {
-	"Welcome to this equal_super_3wire_escape circuit puzzle!"
+	"This time, put eight basis states into equal superpositions"
 }
 prof_q.areas.equal_super_3wire_escape.help_success_msg = {
-	"equal_super_3wire_escape Congratulations!"
+	"You've got this! You may be familiar with the 'sum' notation on the wall, which",
+	"provides a succinct way to express this state in which all of the basis states have",
+	"the same amplitude."
 }
 prof_q.areas.equal_super_3wire_escape.help_chat_sent = false
 prof_q.areas.equal_super_3wire_escape.success_chat_sent = false
