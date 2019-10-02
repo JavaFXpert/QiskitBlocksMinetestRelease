@@ -57,6 +57,9 @@ MUSIC_ACTIVE = 2
 MUSIC_EXCITED = 3
 MUSIC_CONGRATS = 4
 
+local locale_lang = prof_q:get_locale_lang()
+minetest.debug("q_command_locale_lang: " .. locale_lang)
+
 -- our API object
 q_command = {}
 
@@ -1324,7 +1327,7 @@ function q_command:register_q_command_block(suffix_correct_solution,
 
                             local statevector = q_command:parse_json_statevector(sv_data)
 
-                            minetest.debug("statevector:\n" .. dump(statevector))
+                            -- minetest.debug("statevector:\n" .. dump(statevector))
 
                             -- minetest.debug("correct_solution_statevector:\n" .. dump(correct_solution_statevector))
 
@@ -2024,7 +2027,7 @@ end
 
 --- Help buttons ---
 function q_command:register_help_button(suffix, caption, fulltext)
-	--q_command.captions[itemstringpart] = caption
+    local localized_fulltext = fulltext[locale_lang]
 	minetest.register_node("q_command:q_command_button_wall_help_" .. suffix, {
 		description = suffix .. " help button",
 		drawtype = "nodebox",
@@ -2044,7 +2047,7 @@ function q_command:register_help_button(suffix, caption, fulltext)
 		},
 		groups = {cracky = 2, attached_node = 1},
 		legacy_wallmounted = true,
-		on_construct = function(pos)
+		on_rightclick = function(pos)
 			local meta = minetest.get_meta(pos)
 			local formspec = ""..
 			"size[12,6]"..
@@ -2052,7 +2055,7 @@ function q_command:register_help_button(suffix, caption, fulltext)
 			"tablecolumns[text]"..
 			"tableoptions[background=#000000;highlight=#000000;border=false]"..
 			"table[0,0.25;12,5.2;infosign_text;"..
-			q_command:convert_newlines(minetest.formspec_escape(S(fulltext)))..
+			q_command:convert_newlines(minetest.formspec_escape(S(localized_fulltext)))..
 			"]"..
 			"button_exit[4.5,5.5;3,1;close;"..minetest.formspec_escape(S("Close")).."]"
 			meta:set_string("formspec", formspec)
@@ -2060,6 +2063,22 @@ function q_command:register_help_button(suffix, caption, fulltext)
 			--meta:set_string("id", itemstringpart)
 			meta:set_string("caption", caption)
 		end,
+		--on_construct = function(pos)
+		--	local meta = minetest.get_meta(pos)
+		--	local formspec = ""..
+		--	"size[12,6]"..
+		--	"label[-0.15,-0.4;"..minetest.formspec_escape(S(caption)).."]"..
+		--	"tablecolumns[text]"..
+		--	"tableoptions[background=#000000;highlight=#000000;border=false]"..
+		--	"table[0,0.25;12,5.2;infosign_text;"..
+		--	q_command:convert_newlines(minetest.formspec_escape(S(localized_fulltext)))..
+		--	"]"..
+		--	"button_exit[4.5,5.5;3,1;close;"..minetest.formspec_escape(S("Close")).."]"
+		--	meta:set_string("formspec", formspec)
+		--	meta:set_string("infotext", string.format(S("%s (Right-click for hints)"), S(caption)))
+		--	--meta:set_string("id", itemstringpart)
+		--	meta:set_string("caption", caption)
+		--end,
 		on_receive_fields = function(pos, formname, fields, sender)
 			--print("Sign at "..minetest.pos_to_string(pos).." got "..dump(fields))
 			local player_name = sender:get_player_name()
@@ -2084,9 +2103,10 @@ function q_command:register_help_button(suffix, caption, fulltext)
 	})
 end
 
-q_command.texts = {}
 
-q_command.texts.quantum_circuit_world =
+q_command.texts = {}
+q_command.texts.quantum_circuit_world = {}
+q_command.texts.quantum_circuit_world.en =
 [[
 Welcome to the world of quantum computing circuits! The block-world
 environment you are currently in is created with the Minetest.net
@@ -2104,26 +2124,93 @@ will be available in chests along the way. Please leave them in this
 room, and come back anytime you have questions about what they do or how
 to use them.
 
-The first place outside this room that you may want to visit is the
+If want an escape room-like experience, check out the puzzle rooms at
+the bottom of the ladder located in this building. Professor Q will help
+guide you through the circuit puzzles by sending chat message to the
+upper-left corner of your window.
+
+Another place outside this room that you may want to visit is the
 quantum cats sandbox. In that area, some basic quantum computing
 circuits and gates are demonstrated with grumpy and happy cats instead
 of the usual qubits. To get there, follow the light blocks just outside
 the front doors into the woods.
 
-If you would rather skip the cats, then a good place to begin your
-journey would be in the quantum circuit garden on the other side of the
-large wall outside the front doors.
+Other places to visit include the quantum circuit garden on the other
+side of the large wall outside the front doors, and the 'OpenQASM Chasm'
+surrounded by a wooden gate.
 
-If want an escape room-like experience, check out the puzzle rooms at
-the bottom of the ladder located in this building.
+Wherever you choose to begin, more help is available by right-clicking
+the Help buttons (labeled with a question mark) as you encounter them.
+Good luck!
+]]
+q_command.texts.quantum_circuit_world.es =
+[[
+TODO: REPLACE THIS MACHINE TRANSLATED TEXT
+¡Bienvenido al mundo de los circuitos de computación cuántica! El
+entorno mundial de bloques en el que se encuentra actualmente se crea
+con la biblioteca de código abierto Minetest.net. Una lista de controles
+para moverse y hacer cosas en Minetest está disponible al pausar el
+juego (por ejemplo, con la tecla Esc en algunas plataformas). Las
+puertas y circuitos cuánticos con los que interactuarás están
+alimentados por <https://qiskit.org/> simuladores cuánticos.
 
-Wherever you choose to begin, please be sure to right-click the Help
-buttons (labeled with a question mark) as you encounter them. Good luck!
+Hay un número creciente de áreas que puede explorar en este entorno.
+Primero, sería útil leer los signos en esta sala (haciendo clic derecho
+sobre ellos), ya que describen el comportamiento de varios bloques
+relacionados con la computación cuántica que encontrará. Por cierto, no
+hay necesidad de sacar los bloques y las herramientas de esta habitación,
+ya que estarán disponibles en cofres en el camino. Déjelos en esta sala
+y regrese cada vez que tenga preguntas sobre lo que hacen o cómo usarlos.
+
+Si desea una experiencia similar a una sala de escape, eche un vistazo a
+las salas de rompecabezas en la parte inferior de la escalera ubicada en
+este edificio. El Profesor Q lo guiará a través de los rompecabezas del
+circuito enviando un mensaje de chat a la esquina superior izquierda de
+su ventana.
+
+Otro lugar fuera de esta sala que es posible que desee visitar es el
+cajón de arena para gatos cuánticos. En esa área, algunos circuitos
+básicos de computación cuántica y puertas se demuestran con gatos
+gruñones y felices en lugar de los qubits habituales. Para llegar allí,
+sigue los bloques de luz justo afuera de las puertas de entrada al bosque.
+
+Otros lugares para visitar incluyen el jardín del circuito cuántico en
+el otro lado de la gran pared fuera de las puertas de entrada, y el
+'Abismo OpenQASM' rodeado por una puerta de madera.
+
+Dondequiera que elija comenzar, hay más ayuda disponible haciendo clic
+con el botón derecho en los botones de Ayuda (etiquetados con un signo
+de interrogación) cuando los encuentre. ¡Buena suerte!
+]]
+q_command.texts.quantum_circuit_world.ja =
+[[
+TODO: REPLACE THIS MACHINE TRANSLATED TEXT
+量子計算回路の世界へようこそ！現在のブロックワールド環境は、Minetest.netオープンソースライブラリ
+を使用して作成されます。 Minetestでの移動や操作のためのコントロールのリストは、ゲームを一時停止することで
+利用できます（たとえば、一部のプラットフォームではEscキーで）。相互作用する量子ゲートと回路は、
+<https://qiskit.org/>量子シミュレーターを使用しています。
+
+この環境で探索できる領域は増え続けています。まず、この部屋の標識を右クリックして読むと便利です。
+これらの標識は、発生するさまざまな量子コンピューティング関連ブロックの動作を説明しているためです。
+ちなみに、この部屋からブロックやツールを取り出す必要はありません。それらは道に沿ってチェストで利用できるからです。
+この部屋にそれらを残し、彼らが何をするか、またはそれらをどのように使用するかについて質問があるときはいつでも戻って来てください。
+
+脱出室のような体験が必要な場合は、この建物にあるはしごの下部にあるパズルルームをチェックしてください。
+教授Qは、ウィンドウの左上隅にチャットメッセージを送信して、サーキットパズルをガイドします。
+
+この部屋の外にある別の場所は、量子猫の砂場です。その分野では、いくつかの基本的な量子計算回路とゲートが、
+通常のキュービットの代わりに不機嫌で幸せな猫で示されています。そこに着くには、
+正面玄関のすぐ外にあるライトブロックをたどって森に入ります。
+
+訪問する他の場所には、正面玄関の外側の大きな壁の反対側の量子回路庭園、および木製の門に囲まれた「OpenQASM Chasm」が含まれます。
+
+開始する場所を選択すると、ヘルプボタン（疑問符のラベルが付いている）を右クリックすると、ヘルプが表示されます。幸運を！
 ]]
 q_command:register_help_button("quantum_circuit_world", "Read me first!", q_command.texts.quantum_circuit_world)
 
 
-q_command.texts.x_rx_gates =
+q_command.texts.x_rx_gates = {}
+q_command.texts.x_rx_gates.en =
 [[
 The X and Rx gates rotate a qubit state around the X axis of a Bloch
 sphere (refer to the Bloch spheres on the wall). While wielding one of
@@ -2159,10 +2246,13 @@ the Change Keys button.
 To remove an X gate, or any other gate from a circuit, left-click it
 while wielding a block (or empty-handed if you are close enough).
 ]]
+q_command.texts.x_rx_gates.es = q_command.texts.x_rx_gates.en
+q_command.texts.x_rx_gates.ja = q_command.texts.x_rx_gates.en
 q_command:register_help_button("x_rx_gates", "X and Rx gates", q_command.texts.x_rx_gates)
 
 
-q_command.texts.y_ry_gates =
+q_command.texts.y_ry_gates = {}
+q_command.texts.y_ry_gates.en =
 [[
 The Y and Ry gates rotate a qubit state around the Y axis of a Bloch
 sphere (refer to a Bloch sphere on the wall). While wielding one of
@@ -2185,10 +2275,13 @@ whenever the control is in state |1>.
 To remove a Y gate, or any other gate from a circuit, left-click it
 while wielding a block (or empty-handed if you are close enough).
 ]]
+q_command.texts.y_ry_gates.es = q_command.texts.y_ry_gates.en
+q_command.texts.y_ry_gates.ja = q_command.texts.y_ry_gates.en
 q_command:register_help_button("y_ry_gates", "Y and Ry gates", q_command.texts.y_ry_gates)
 
 
-q_command.texts.z_rz_gates =
+q_command.texts.z_rz_gates = {}
+q_command.texts.z_rz_gates.en =
 [[The Z and Rz gates rotate a qubit state around the Z axis of a Bloch
 sphere, shifting its phase (refer to a Bloch sphere on the wall). While
 wielding one of these gates, right-click to place it on a quantum circuit.
@@ -2211,10 +2304,13 @@ has a control qubit, in which case it is known as a controlled-Rz gate.
 To remove a Z gate, or any other gate from a circuit, left-click it
 while wielding a block (or empty-handed if you are close enough).
 ]]
+q_command.texts.z_rz_gates.es = q_command.texts.z_rz_gates.en
+q_command.texts.z_rz_gates.ja = q_command.texts.z_rz_gates.en
 q_command:register_help_button("z_rz_gates", "Z and Rz gates", q_command.texts.z_rz_gates)
 
 
-q_command.texts.h_gate_desc =
+q_command.texts.h_gate_desc = {}
+q_command.texts.h_gate_desc.en =
 [[
 The H (for Hadamard) gate rotates a qubit state around the diagonal X+Z
 axis of a Bloch sphere (refer to a Bloch spheres on the wall). For
@@ -2239,10 +2335,13 @@ target whenever the control is in state |1>.
 To remove an H gate, or any other gate from a circuit, left-click it
 while wielding a block (or empty-handed if you are close enough).
 ]]
+q_command.texts.h_gate_desc.es = q_command.texts.h_gate_desc.en
+q_command.texts.h_gate_desc.ja = q_command.texts.h_gate_desc.en
 q_command:register_help_button("h_gate_desc", "Hadamard gate", q_command.texts.h_gate_desc)
 
 
-q_command.texts.swap_gate_desc =
+q_command.texts.swap_gate_desc = {}
+q_command.texts.swap_gate_desc.en =
 [[
 The Swap gate swaps the states of the qubits on two wires with each
 other. While wielding a Swap gate block, right-click to place it on one
@@ -2265,10 +2364,12 @@ control qubit is in state |1>.
 To remove a Swap gate, or any other gate from a circuit, left-click it
 while wielding a block (or empty-handed if you are close enough).
 ]]
+q_command.texts.swap_gate_desc.es = q_command.texts.swap_gate_desc.en
+q_command.texts.swap_gate_desc.ja = q_command.texts.swap_gate_desc.en
 q_command:register_help_button("swap_gate_desc", "Swap gate", q_command.texts.swap_gate_desc)
 
-
-q_command.texts.s_sdg_gates_desc =
+q_command.texts.s_sdg_gates_desc = {}
+q_command.texts.s_sdg_gates_desc.en =
 [[
 The S, and Sdg, gates rotate a qubit state around the Z axis of a Bloch
 sphere, shifting its phase (refer to a Bloch sphere on the wall). The S
@@ -2284,10 +2385,13 @@ on a quantum circuit.
 To remove an S gate, or any other gate from a circuit, left-click it
 while wielding a block (or empty-handed if you are close enough).
 ]]
+q_command.texts.s_sdg_gates_desc.es = q_command.texts.s_sdg_gates_desc.en
+q_command.texts.s_sdg_gates_desc.ja = q_command.texts.s_sdg_gates_desc.en
 q_command:register_help_button("s_sdg_gates_desc", "S and Sdg gates", q_command.texts.s_sdg_gates_desc)
 
 
-q_command.texts.t_tdg_gates_desc =
+q_command.texts.t_tdg_gates_desc = {}
+q_command.texts.t_tdg_gates_desc.en =
 [[
 The T, and Tdg, gates rotate a qubit state around the Z axis of a Bloch
 sphere, shifting its phase (refer to a Bloch sphere on the wall). The T
@@ -2303,10 +2407,13 @@ of these gates, right-click to place it on a quantum circuit.
 To remove a T gate, or any other gate from a circuit, left-click it
 while wielding a block (or empty-handed if you are close enough).
 ]]
+q_command.texts.t_tdg_gates_desc.es = q_command.texts.t_tdg_gates_desc.en
+q_command.texts.t_tdg_gates_desc.ja = q_command.texts.t_tdg_gates_desc.en
 q_command:register_help_button("t_tdg_gates_desc", "T and Tdg gates", q_command.texts.t_tdg_gates_desc)
 
 
-q_command.texts.measurement_z_desc =
+q_command.texts.measurement_z_desc = {}
+q_command.texts.measurement_z_desc.en =
 [[
 The Measurement block performs a measurement on a qubit in the Z basis,
 which is also called the computational, or standard, basis. Referring to
@@ -2337,10 +2444,13 @@ To remove a Measurement block, or any other block from a circuit,
 left-click it while wielding a block (or empty-handed if you are close
 enough).
 ]]
+q_command.texts.measurement_z_desc.es = q_command.texts.measurement_z_desc.en
+q_command.texts.measurement_z_desc.ja = q_command.texts.measurement_z_desc.en
 q_command:register_help_button("measurement_z_desc", "Measurement in Z basis", q_command.texts.measurement_z_desc)
 
 
-q_command.texts.bloch_sphere_block_desc =
+q_command.texts.bloch_sphere_block_desc = {}
+q_command.texts.bloch_sphere_block_desc.en =
 [[
 A Bloch sphere, like these on the wall, represents the quantum state of
 a qubit. Anywhere on the surface of the sphere is a valid quantum state.
@@ -2364,10 +2474,13 @@ To remove a Bloch sphere block, or any other block from a circuit,
 left-click it while wielding a block (or empty-handed if you are close
 enough).
 ]]
+q_command.texts.bloch_sphere_block_desc.es = q_command.texts.bloch_sphere_block_desc.en
+q_command.texts.bloch_sphere_block_desc.ja = q_command.texts.bloch_sphere_block_desc.en
 q_command:register_help_button("bloch_sphere_block_desc", "The Bloch sphere", q_command.texts.bloch_sphere_block_desc)
 
 
-q_command.texts.hsv_color_qubit_block_desc =
+q_command.texts.hsv_color_qubit_block_desc = {}
+q_command.texts.hsv_color_qubit_block_desc.en =
 [[
 An HSV color block, like these on the wall, represent the quantum state
 of a qubit. For example, the top-left HSV color block represents state
@@ -2391,11 +2504,14 @@ To remove an HSV color block, or any other block from a circuit,
 left-click it while wielding a block (or empty-handed if you are close
 enough).
 ]]
+q_command.texts.hsv_color_qubit_block_desc.es = q_command.texts.hsv_color_qubit_block_desc.en
+q_command.texts.hsv_color_qubit_block_desc.ja = q_command.texts.hsv_color_qubit_block_desc.en
 q_command:register_help_button("hsv_color_qubit_block_desc", "The HSV color block",
         q_command.texts.hsv_color_qubit_block_desc)
 
 
-q_command.texts.reset_op_desc =
+q_command.texts.reset_op_desc = {}
+q_command.texts.reset_op_desc.en =
 [[
 The Reset operation returns a qubit to state |0> (represented by the top
 left Bloch sphere on the wall), irrespective of its state before the
@@ -2407,10 +2523,13 @@ circuit.
 To remove a Reset block, or any other block from a circuit, left-click
 it while wielding a block (or empty-handed if you are close enough).
 ]]
+q_command.texts.reset_op_desc.es = q_command.texts.reset_op_desc.en
+q_command.texts.reset_op_desc.ja = q_command.texts.reset_op_desc.en
 q_command:register_help_button("reset_op_desc", "Reset or |0> operation", q_command.texts.reset_op_desc)
 
 
-q_command.texts.barrier_op_desc =
+q_command.texts.barrier_op_desc = {}
+q_command.texts.barrier_op_desc.en =
 [[To make your quantum program more efficient, the compiler will try to
 combine gates. The Barrier is an instruction to the compiler to prevent
 these combinations being made.
@@ -2421,10 +2540,13 @@ circuit.
 To remove a Barrier block, or any other block from a circuit, left-click
 it while wielding a block (or empty-handed if you are close enough).
 ]]
+q_command.texts.barrier_op_desc.es = q_command.texts.barrier_op_desc.en
+q_command.texts.barrier_op_desc.ja = q_command.texts.barrier_op_desc.en
 q_command:register_help_button("barrier_op_desc", "Barrier operation", q_command.texts.barrier_op_desc)
 
 
-q_command.texts.if_op_block_desc =
+q_command.texts.if_op_block_desc = {}
+q_command.texts.if_op_block_desc.en =
 [[
 The If operation allows quantum gates to be conditionally applied,
 depending on the state of a classical register. While wielding an If
@@ -2443,10 +2565,13 @@ To remove an If operation block, or any other block from a circuit,
 left-click it while wielding a block (or empty-handed if you are close
 enough).
 ]]
+q_command.texts.if_op_block_desc.es = q_command.texts.if_op_block_desc.en
+q_command.texts.if_op_block_desc.ja = q_command.texts.if_op_block_desc.en
 q_command:register_help_button("if_op_block_desc", "If operation", q_command.texts.if_op_block_desc)
 
 
-q_command.texts.wire_extender_block_desc =
+q_command.texts.wire_extender_block_desc = {}
+q_command.texts.wire_extender_block_desc.en =
 [[
 Although not representative of a Qiskit operation, the Wire Extender
 block enables a circuit wire to be extended to another location. Here is
@@ -2475,10 +2600,13 @@ from a circuit, while pressing the Special key, left-click the Wire
 Continuation block. The Special key may be known, and set, by pausing
 the game and choosing the Change Keys button.
 ]]
+q_command.texts.wire_extender_block_desc.es = q_command.texts.wire_extender_block_desc.en
+q_command.texts.wire_extender_block_desc.ja = q_command.texts.wire_extender_block_desc.en
 q_command:register_help_button("wire_extender_block_desc", "Wire Extender block", q_command.texts.wire_extender_block_desc)
 
 
-q_command.texts.q_block_desc =
+q_command.texts.q_block_desc = {}
+q_command.texts.q_block_desc.en =
 [[
 The Q block enables you to create a quantum circuit that may be executed
 by Qiskit simulators. Here is the procedure for creating a quantum circuit:
@@ -2517,10 +2645,13 @@ To remove a Q block and its circuit, while pressing the Special key
 left-click the Q block. The Special key may be known, and set, by
 pausing the game and choosing the Change Keys button.
 ]]
+q_command.texts.q_block_desc.es = q_command.texts.q_block_desc.en
+q_command.texts.q_block_desc.ja = q_command.texts.q_block_desc.en
 q_command:register_help_button("q_block_desc", "Q block", q_command.texts.q_block_desc)
 
 
-q_command.texts.quantum_cats_sandbox =
+q_command.texts.quantum_cats_sandbox = {}
+q_command.texts.quantum_cats_sandbox.en =
 [[
 There are so many ones and zeros in quantum computing that some folks
 find it easier to initially relate to states with real world concepts
@@ -2546,13 +2677,17 @@ it from the upper to the lower section of the chest dialog box. The
 items that appear in the top row of the inventory will appear in the
 hotbar ready to be wielded.
 
-There are a some tools in the chest with which you may add control
+There are some tools in the chest with which you may add control
 qubits to a gate, as well as to rotate a gate. To use these tools,
 position the cursor on an appropriate gate and left-click or right-click.
 ]]
+q_command.texts.quantum_cats_sandbox.es = q_command.texts.quantum_cats_sandbox.en
+q_command.texts.quantum_cats_sandbox.ja = q_command.texts.quantum_cats_sandbox.en
 q_command:register_help_button("quantum_cats_sandbox", "Quantum cats sandbox", q_command.texts.quantum_cats_sandbox)
 
-q_command.texts.making_cats_happy =
+
+q_command.texts.making_cats_happy = {}
+q_command.texts.making_cats_happy.en =
 [[
 This circuit, consisting of only one wire (cat), leverages the Pauli-X
 gate, also known as the NOT, or bit-flip, gate. Its effect on a grumpy
@@ -2560,17 +2695,25 @@ cat is to make it happy, and vice-versa. Notice how the outcome
 probabilities and measurement results change as this gate is removed and
 added.
 ]]
+q_command.texts.making_cats_happy.es = q_command.texts.making_cats_happy.en
+q_command.texts.making_cats_happy.ja = q_command.texts.making_cats_happy.en
 q_command:register_help_button("making_cats_happy", "Making a cat happy", q_command.texts.making_cats_happy)
 
-q_command.texts.superpositional_cat =
+
+q_command.texts.superpositional_cat = {}
+q_command.texts.superpositional_cat.en =
 [[
 This circuit leverages the Hadamard gate to put a cat into an equal
 superposition of grumpy and happy. Notice how the outcome probabilities
 and measurement results change as this gate is removed and added.
 ]]
+q_command.texts.superpositional_cat.es = q_command.texts.superpositional_cat.en
+q_command.texts.superpositional_cat.ja = q_command.texts.superpositional_cat.en
 q_command:register_help_button("superpositional_cat", "Superposition of grumpy and happy cat", q_command.texts.superpositional_cat)
 
-q_command.texts.entangling_cats =
+
+q_command.texts.entangling_cats = {}
+q_command.texts.entangling_cats.en =
 [[
 This two-wire circuit demonstrates the property known as quantum
 entanglement. Notice that each of the wires in the circuit are continued
@@ -2589,9 +2732,13 @@ used in another circuit in this cat sandbox. The difference is that it
 is conditional on the state of the other wire, performing the NOT
 operation whenever the other wire is in the happy cat state.
 ]]
+q_command.texts.entangling_cats.es = q_command.texts.entangling_cats.en
+q_command.texts.entangling_cats.ja = q_command.texts.entangling_cats.en
 q_command:register_help_button("entangling_cats", "Entangling cats", q_command.texts.entangling_cats)
 
-q_command.texts.quantum_circuit_garden =
+
+q_command.texts.quantum_circuit_garden = {}
+q_command.texts.quantum_circuit_garden.en =
 [[
 Welcome to the quantum circuit garden, which contains various
 circuit-based puzzles to solve. For more information on the challenge
@@ -2617,11 +2764,14 @@ rightmost digit of each basis state represents the topmost wire. To
 measure a circuit, right-click on a block that has the appearance of a
 measuring device.
 ]]
+q_command.texts.quantum_circuit_garden.es = q_command.texts.quantum_circuit_garden.en
+q_command.texts.quantum_circuit_garden.ja = q_command.texts.quantum_circuit_garden.en
 q_command:register_help_button("quantum_circuit_garden", "Quantum circuit garden", q_command.texts.quantum_circuit_garden)
 
 q_command:register_q_command_block("default")
 
-q_command.texts.x_gate =
+q_command.texts.x_gate = {}
+q_command.texts.x_gate.en =
 [[
 TLDR: Get an X block from chest and place on the circuit, making the
 blue liquid levels correspond to a quantum state of |1>. Measure circuit
@@ -2650,6 +2800,8 @@ always the result.
 
 If the Q block turned gold, congratulations on solving the puzzle!
 ]]
+q_command.texts.x_gate.es = q_command.texts.x_gate.en
+q_command.texts.x_gate.ja = q_command.texts.x_gate.en
 q_command:register_help_button("x_gate", "Quantum NOT gate", q_command.texts.x_gate)
 local solution_statevector_x_gate =
 {
@@ -2668,7 +2820,8 @@ q_command:register_q_command_block( "x_gate_success", "x_gate",
         solution_statevector_x_gate, false)
 
 
-q_command.texts.h_gate =
+q_command.texts.h_gate = {}
+q_command.texts.h_gate.en =
 [[
 TLDR: Using only an H gate, make the blue liquid levels correspond to a
 quantum state of sqrt(1/2) |0> + sqrt(1/2) |1>. Measure the circuit
@@ -2700,6 +2853,8 @@ the results are fairly evenly distributed between |0> and |1>.
 
 If the Q block turned gold, congratulations on solving the puzzle!
 ]]
+q_command.texts.h_gate.es = q_command.texts.h_gate.en
+q_command.texts.h_gate.ja = q_command.texts.h_gate.en
 q_command:register_help_button("h_gate", "Hadamard gate", q_command.texts.h_gate)
 local solution_statevector_h_gate =
 {
@@ -2718,7 +2873,8 @@ q_command:register_q_command_block( "h_gate_success", "h_gate",
         solution_statevector_h_gate, false)
 
 
-q_command.texts.cnot_gate_puzzle =
+q_command.texts.cnot_gate_puzzle = {}
+q_command.texts.cnot_gate_puzzle.en =
 [[
 The CNOT gate, also referred to as the controlled-NOT or controlled-X
 gate, is one of the two-qubit gates in quantum computing. To create a
@@ -2754,6 +2910,8 @@ blocks to verify that |01> is always the result.
 
 If the Q block turned gold, congratulations on solving the puzzle!
 ]]
+q_command.texts.cnot_gate_puzzle.es = q_command.texts.cnot_gate_puzzle.en
+q_command.texts.cnot_gate_puzzle.ja = q_command.texts.cnot_gate_puzzle.en
 q_command:register_help_button("cnot_gate_puzzle", "CNOT gate puzzle", q_command.texts.cnot_gate_puzzle)
 local solution_statevector_cnot_gate_puzzle =
 {
@@ -2780,7 +2938,8 @@ q_command:register_q_command_block( "cnot_gate_puzzle_success", "cnot_gate_puzzl
         solution_statevector_cnot_gate_puzzle, false, {x = 0, y = 0, z = 0})
 
 
-q_command.texts.hxx_gates =
+q_command.texts.hxx_gates = {}
+q_command.texts.hxx_gates.en =
 [[
 TLDR: Using only H and X gates, make the blue liquid levels correspond
 to a quantum state of sqrt(1/2) |001> + sqrt(1/2) |101>.
@@ -2799,6 +2958,8 @@ gates on single-wire circuits.
 
 If the Q block turned gold, congratulations on solving the puzzle!
 ]]
+q_command.texts.hxx_gates.es = q_command.texts.hxx_gates.en
+q_command.texts.hxx_gates.ja = q_command.texts.hxx_gates.en
 q_command:register_help_button("hxx_gates", "Hadamard and X gates 3 wires", q_command.texts.hxx_gates)
 local solution_statevector_hxx_gates =
 {
@@ -2841,7 +3002,8 @@ q_command:register_q_command_block( "hxx_gates_success", "hxx_gates",
         solution_statevector_hxx_gates, false)
 
 
-q_command.texts.bell_phi_plus =
+q_command.texts.bell_phi_plus = {}
+q_command.texts.bell_phi_plus.en =
 [[
 The four simplest examples of quantum entanglement are the Bell states.
 The most well-known Bell state, symbolized by phi+, may be
@@ -2868,6 +3030,8 @@ wire as the Hadamard gate.
 
 If the Q block turned gold, congratulations on solving the puzzle!
 ]]
+q_command.texts.bell_phi_plus.es = q_command.texts.bell_phi_plus.en
+q_command.texts.bell_phi_plus.ja = q_command.texts.bell_phi_plus.en
 q_command:register_help_button("bell_phi_plus", "Bell State: phi+", q_command.texts.bell_phi_plus)
 local solution_statevector_bell_phi_plus =
 {
@@ -2894,7 +3058,8 @@ q_command:register_q_command_block( "bell_phi_plus_success", "bell_phi_plus",
         solution_statevector_bell_phi_plus, false)
 
 
-q_command.texts.bell_phi_minus =
+q_command.texts.bell_phi_minus = {}
+q_command.texts.bell_phi_minus.en =
 [[
 The four simplest examples of quantum entanglement are the Bell states.
 One of these Bell states, symbolized by phi- (phi minus), may be realized
@@ -2912,6 +3077,8 @@ phase of pi radians.
 
 If the Q block turned gold, congratulations on solving the puzzle!
 ]]
+q_command.texts.bell_phi_minus.es = q_command.texts.bell_phi_minus.en
+q_command.texts.bell_phi_minus.ja = q_command.texts.bell_phi_minus.en
 q_command:register_help_button("bell_phi_minus", "Bell State: phi-", q_command.texts.bell_phi_minus)
 local solution_statevector_bell_phi_minus =
 {
@@ -2938,7 +3105,8 @@ q_command:register_q_command_block( "bell_phi_minus_success", "bell_phi_minus",
         solution_statevector_bell_phi_minus, false)
 
 
-q_command.texts.bell_psi_plus =
+q_command.texts.bell_psi_plus = {}
+q_command.texts.bell_psi_plus.en =
 [[
 The four simplest examples of quantum entanglement are the Bell states.
 One of these Bell states, symbolized by psi+ (psi plus), may be realized
@@ -2957,6 +3125,8 @@ qubit will be measured as the opposite state.
 
 If the Q block turned gold, congratulations on solving the puzzle!
 ]]
+q_command.texts.bell_psi_plus.es = q_command.texts.bell_psi_plus.en
+q_command.texts.bell_psi_plus.ja = q_command.texts.bell_psi_plus.en
 q_command:register_help_button("bell_psi_plus", "Bell State: psi+", q_command.texts.bell_psi_plus)
 local solution_statevector_bell_psi_plus =
 {
@@ -2983,7 +3153,8 @@ q_command:register_q_command_block( "bell_psi_plus_success", "bell_psi_plus",
         solution_statevector_bell_psi_plus, false)
 
 
-q_command.texts.bell_psi_minus =
+q_command.texts.bell_psi_minus = {}
+q_command.texts.bell_psi_minus.en =
 [[
 The four simplest examples of quantum entanglement are the Bell states.
 One of these Bell states, symbolized by psi- (psi minus), may be realized
@@ -3004,6 +3175,8 @@ qubit will be measured as the opposite state.
 
 If the Q block turned gold, congratulations on solving the puzzle!
 ]]
+q_command.texts.bell_psi_minus.es = q_command.texts.bell_psi_minus.en
+q_command.texts.bell_psi_minus.ja = q_command.texts.bell_psi_minus.en
 q_command:register_help_button("bell_psi_minus", "Bell State: psi-", q_command.texts.bell_psi_minus)
 local solution_statevector_bell_psi_minus =
 {
@@ -3030,7 +3203,8 @@ q_command:register_q_command_block( "bell_psi_minus_success", "bell_psi_minus",
         solution_statevector_bell_psi_minus, false)
 
 
-q_command.texts.ghz_state =
+q_command.texts.ghz_state = {}
+q_command.texts.ghz_state.en =
 [[
 GHZ (Greenberger–Horne–Zeilinger) states are entangled states involving
 three or more qubits, where the basis states involved contain all zeros
@@ -3053,6 +3227,8 @@ blocks) results in either |000> or |111> each time.
 
 If the Q block turned gold, congratulations on solving the puzzle!
 ]]
+q_command.texts.ghz_state.es = q_command.texts.ghz_state.en
+q_command.texts.ghz_state.ja = q_command.texts.ghz_state.en
 q_command:register_help_button("ghz_state", "GHZ states", q_command.texts.ghz_state)
 local solution_statevector_ghz_state =
 {
@@ -3095,7 +3271,8 @@ q_command:register_q_command_block( "ghz_state_success", "ghz_state",
         solution_statevector_ghz_state, false)
 
 
-q_command.texts.equal_super_2wire =
+q_command.texts.equal_super_2wire = {}
+q_command.texts.equal_super_2wire.en =
 [[
 TLDR: Using only H gates, make the blue liquid levels correspond to the
 following quantum state, commonly referred to as an equal superposition:
@@ -3112,6 +3289,8 @@ states.
 
 If the Q block turned gold, congratulations on solving the puzzle!
 ]]
+q_command.texts.equal_super_2wire.es = q_command.texts.equal_super_2wire.en
+q_command.texts.equal_super_2wire.ja = q_command.texts.equal_super_2wire.en
 q_command:register_help_button("equal_super_2wire", "Equal superposition with two qubits", q_command.texts.equal_super_2wire)
 local solution_statevector_equal_super_2wire =
 {
@@ -3140,7 +3319,8 @@ q_command:register_q_command_block( "equal_super_2wire_success",
         solution_statevector_equal_super_2wire, false)
 
 
-q_command.texts.rotate_yz_gates_puzzle =
+q_command.texts.rotate_yz_gates_puzzle = {}
+q_command.texts.rotate_yz_gates_puzzle.en =
 [[
 The Rx and X gates rotate a qubit state around the X axis of a Bloch
 sphere. The Ry and Y gates rotate a qubit state around the Y axis. The
@@ -3174,6 +3354,8 @@ the top wire. This demonstrates that there are many combinations
 (actually an infinite number) of gate operations that can arrive at the
 same state.
 ]]
+q_command.texts.rotate_yz_gates_puzzle.es = q_command.texts.rotate_yz_gates_puzzle.en
+q_command.texts.rotate_yz_gates_puzzle.ja = q_command.texts.rotate_yz_gates_puzzle.en
 q_command:register_help_button("rotate_yz_gates_puzzle", "Rotate X/Y/Z gates puzzle", q_command.texts.rotate_yz_gates_puzzle)
 local solution_statevector_rotate_yz_gates_puzzle =
 {
@@ -3200,7 +3382,8 @@ q_command:register_q_command_block( "rotate_yz_gates_puzzle_success", "rotate_yz
         solution_statevector_rotate_yz_gates_puzzle, false)
 
 
-q_command.texts.swap_gate_puzzle =
+q_command.texts.swap_gate_puzzle = {}
+q_command.texts.swap_gate_puzzle.en =
 [[
 The Swap gate swaps the states of the qubits on two wires with each
 other. To work through this puzzle, take the following steps:
@@ -3227,6 +3410,8 @@ demonstrates that the qubits have switched wires with each other because
 of the Swap gate. Go ahead and right-click one of the measurement blocks
 to verify that |10> is always the result.
 ]]
+q_command.texts.swap_gate_puzzle.es = q_command.texts.swap_gate_puzzle.en
+q_command.texts.swap_gate_puzzle.ja = q_command.texts.swap_gate_puzzle.en
 q_command:register_help_button("swap_gate_puzzle", "Swap gate puzzle", q_command.texts.swap_gate_puzzle)
 local solution_statevector_swap_gate_puzzle =
 {
@@ -3253,17 +3438,18 @@ q_command:register_q_command_block( "swap_gate_puzzle_success", "swap_gate_puzzl
         solution_statevector_swap_gate_puzzle, false)
 
 
-q_command.texts.deutsch_algo_puzzle =
+q_command.texts.deutsch_algo_puzzle = {}
+q_command.texts.deutsch_algo_puzzle.en =
 [[
 The Deutsch algorithm, first published in 1985, is the Hello World of
 quantum algorithms.
-
-TODO: Discuss the Deutsch algorithm and relevant concepts.
 
 To work through this puzzle, place appropriate gates between the
 barriers to implement a balanced oracle whose output on the bottom wire
 is the flipped state of its input on the top wire.
 ]]
+q_command.texts.deutsch_algo_puzzle.es = q_command.texts.deutsch_algo_puzzle.en
+q_command.texts.deutsch_algo_puzzle.ja = q_command.texts.deutsch_algo_puzzle.en
 q_command:register_help_button("deutsch_algo_puzzle", "Deutsch's algorithm puzzle", q_command.texts.deutsch_algo_puzzle)
 local solution_statevector_deutsch_algo_puzzle =
 {
@@ -3290,7 +3476,8 @@ q_command:register_q_command_block( "deutsch_algo_puzzle_success", "deutsch_algo
         solution_statevector_deutsch_algo_puzzle, false)
 
 
-q_command.texts.quantum_teleportation =
+q_command.texts.quantum_teleportation = {}
+q_command.texts.quantum_teleportation.en =
 [[
 This circuit demonstrates quantum teleportation, and is an example from
 the paper entitled Open Quantum Assembly Language by Andrew W. Cross,
@@ -3311,8 +3498,9 @@ experiment with quantum teleportation by left and right clicking the Ry
 and Rz gates while wielding the Rotate Tool. The Bloch sphere at the top
 of the chasm should reflect the state that you set with rotations. Note
 that it is expected for the Q block to turn black again.
-
 ]]
+q_command.texts.quantum_teleportation.es = q_command.texts.quantum_teleportation.en
+q_command.texts.quantum_teleportation.ja = q_command.texts.quantum_teleportation.en
 q_command:register_help_button("quantum_teleportation", "Quantum teleportation", q_command.texts.quantum_teleportation)
 local solution_statevector_quantum_teleportation =
 {
@@ -3358,14 +3546,17 @@ q_command:register_q_command_block( "quantum_teleportation_success",
 
 
 -- Escape room puzzles -------------------------------------------------
-q_command.texts.x_gate_escape =
+q_command.texts.x_gate_escape = {}
+q_command.texts.x_gate_escape.en =
 [[
-TLDR: For all of these puzzles, get blocks from the chest and place them
-on the circuit. The door to the next room will open when the liquid
-levels and arrows in the blue blocks correspond to the quantum state
-displayed on the wall behind the circuit in Dirac notation. The Bloch
-sphere at the end of each wire estimates the state of its qubit, and
-right-clicking it performs a measurement of the circuit.
+TLDR: Most of the help that you'll need for these 'escape room' circuit
+puzzles will appear in the chat area (upper left corner of your window)
+by Professor Q. For all of these puzzles, get blocks from the chest and
+place them on the circuit. The door to the next room will open when the
+liquid levels and arrows in the blue blocks correspond to the quantum
+state displayed on the wall behind the circuit in Dirac notation. The
+Bloch sphere at the end of each wire estimates the state of its qubit,
+and right-clicking it performs a measurement of the circuit.
 ----
 
 This circuit, consisting of only one wire, leverages the X gate, also
@@ -3390,6 +3581,8 @@ always the result.
 
 If the Q block turned gold, congratulations on solving the puzzle!
 ]]
+q_command.texts.x_gate_escape.es = q_command.texts.x_gate_escape.en
+q_command.texts.x_gate_escape.ja = q_command.texts.x_gate_escape.en
 q_command:register_help_button("x_gate_escape",
         "Make quantum state of |1>", q_command.texts.x_gate_escape)
 local solution_statevector_x_gate_escape =
@@ -3426,7 +3619,8 @@ q_command:register_q_command_block( "x_gate_escape_success", "x_gate_escape",
         door_pos_x_gate_escape, chest_pos_x_gate_escape, chest_inv_x_gate_escape)
 
 
-q_command.texts.x_gates_2_wire =
+q_command.texts.x_gates_2_wire = {}
+q_command.texts.x_gates_2_wire.en =
 [[
 TLDR: Make the blue liquid levels correspond to a quantum state of |10>
 Measure the circuit several times as extra validation of the correct solution.
@@ -3455,6 +3649,8 @@ always the result.
 
 If the Q block turned gold, congratulations on solving the puzzle!
 ]]
+q_command.texts.x_gates_2_wire.es = q_command.texts.x_gates_2_wire.en
+q_command.texts.x_gates_2_wire.ja = q_command.texts.x_gates_2_wire.en
 q_command:register_help_button("x_gates_2_wire", "Make quantum state of |10>",
         q_command.texts.x_gates_2_wire)
 local solution_statevector_x_gates_2_wire =
@@ -3500,7 +3696,8 @@ q_command:register_q_command_block( "x_gates_2_wire_success", "x_gates_2_wire",
         door_pos_x_gates_2_wire, chest_pos_x_gates_2_wire, chest_inv_x_gates_2_wire)
 
 
-q_command.texts.x_gates_3_wire =
+q_command.texts.x_gates_3_wire = {}
+q_command.texts.x_gates_3_wire.en =
 [[
 TLDR: Make the blue liquid levels correspond to a quantum state of |011>
 The exit door is behind the circuit, so use the ladder.
@@ -3529,6 +3726,8 @@ always the result.
 
 If the Q block turned gold, congratulations on solving the puzzle!
 ]]
+q_command.texts.x_gates_3_wire.es = q_command.texts.x_gates_3_wire.en
+q_command.texts.x_gates_3_wire.ja = q_command.texts.x_gates_3_wire.en
 q_command:register_help_button("x_gates_3_wire", "Make quantum state of |011>",
         q_command.texts.x_gates_3_wire)
 local solution_statevector_x_gates_3_wire =
@@ -3590,7 +3789,8 @@ q_command:register_q_command_block( "x_gates_3_wire_success", "x_gates_3_wire",
         door_pos_x_gates_3_wire, chest_pos_x_gates_3_wire, chest_inv_x_gates_3_wire)
 
 
-q_command.texts.h_gate_escape =
+q_command.texts.h_gate_escape = {}
+q_command.texts.h_gate_escape.en =
 [[
 TLDR: Make the blue liquid levels correspond to a quantum state of
 sqrt(1/2) |0> + sqrt(1/2) |1>, which is commonly referred to as |+>
@@ -3621,6 +3821,8 @@ the results are fairly evenly distributed between |0> and |1>.
 
 If the Q block turned gold, congratulations on solving the puzzle!
 ]]
+q_command.texts.h_gate_escape.es = q_command.texts.h_gate_escape.en
+q_command.texts.h_gate_escape.ja = q_command.texts.h_gate_escape.en
 q_command:register_help_button("h_gate_escape", "Make a quantum state of |+>",
         q_command.texts.h_gate_escape)
 local solution_statevector_h_gate_escape =
@@ -3657,7 +3859,8 @@ q_command:register_q_command_block( "h_gate_escape_success", "h_gate_escape",
         door_pos_h_gate_escape, chest_pos_h_gate_escape, chest_inv_h_gate_escape)
 
 
-q_command.texts.h_x_gate =
+q_command.texts.h_x_gate = {}
+q_command.texts.h_x_gate.en =
 [[
 TLDR: Make the blue liquid levels correspond to a quantum state of
 sqrt(1/2) |0> - sqrt(1/2) |1>, which is commonly referred to as |->
@@ -3691,6 +3894,8 @@ results are fairly evenly distributed between |0> and |1>.
 
 If the Q block turned gold, congratulations on solving the puzzle!
 ]]
+q_command.texts.h_x_gate.es = q_command.texts.h_x_gate.en
+q_command.texts.h_x_gate.ja = q_command.texts.h_x_gate.en
 q_command:register_help_button("h_x_gate", "Make a quantum state of |->", q_command.texts.h_x_gate)
 local solution_statevector_h_x_gate =
 {
@@ -3726,7 +3931,8 @@ q_command:register_q_command_block( "h_x_gate_success", "h_x_gate",
         door_pos_h_x_gate, chest_pos_h_x_gate, chest_inv_h_x_gate)
 
 
-q_command.texts.h_z_gate =
+q_command.texts.h_z_gate = {}
+q_command.texts.h_z_gate.en =
 [[
 TLDR: Using a Z gate and one other gate, make the blue liquid levels
 correspond to a quantum state of sqrt(1/2) |0> - sqrt(1/2) |1>, which is
@@ -3754,6 +3960,8 @@ reflect these probabilities and phases.
 
 If the Q block turned gold, congratulations on solving the puzzle!
 ]]
+q_command.texts.h_z_gate.es = q_command.texts.h_z_gate.en
+q_command.texts.h_z_gate.ja = q_command.texts.h_z_gate.en
 q_command:register_help_button("h_z_gate", "Make a quantum state of |-> using gates including Z", q_command.texts.h_z_gate)
 local solution_statevector_h_z_gate =
 {
@@ -3789,7 +3997,8 @@ q_command:register_q_command_block( "h_z_gate_success", "h_z_gate",
         door_pos_h_z_gate, chest_pos_h_z_gate, chest_inv_h_z_gate)
 
 
-q_command.texts.hxx_gates_escape =
+q_command.texts.hxx_gates_escape = {}
+q_command.texts.hxx_gates_escape.en =
 [[
 TLDR: Make the blue liquid levels correspond to a quantum state of
 sqrt(1/2) |001> + sqrt(1/2) |101>
@@ -3808,6 +4017,8 @@ gates on single-wire circuits.
 
 If the Q block turned gold, congratulations on solving the puzzle!
 ]]
+q_command.texts.hxx_gates_escape.es = q_command.texts.hxx_gates_escape.en
+q_command.texts.hxx_gates_escape.ja = q_command.texts.hxx_gates_escape.en
 q_command:register_help_button("hxx_gates_escape", "Make |001> + |101> quantum state",
         q_command.texts.hxx_gates_escape)
 local solution_statevector_hxx_gates_escape =
@@ -3868,7 +4079,8 @@ q_command:register_q_command_block( "hxx_gates_escape_success", "hxx_gates_escap
         door_pos_hxx_gates_escape, chest_pos_hxx_gates_escape, chest_inv_hxx_gates_escape)
 
 
-q_command.texts.equal_super_2wire_escape =
+q_command.texts.equal_super_2wire_escape = {}
+q_command.texts.equal_super_2wire_escape.en =
 [[
 TLDR: Make the blue liquid levels correspond to the following quantum
 state, commonly referred to as an equal superposition:
@@ -3885,6 +4097,8 @@ states.
 
 If the Q block turned gold, congratulations on solving the puzzle!
 ]]
+q_command.texts.equal_super_2wire_escape.es = q_command.texts.equal_super_2wire_escape.en
+q_command.texts.equal_super_2wire_escape.ja = q_command.texts.equal_super_2wire_escape.en
 q_command:register_help_button("equal_super_2wire_escape", "Equal superposition with two qubits", q_command.texts.equal_super_2wire_escape)
 local solution_statevector_equal_super_2wire_escape =
 {
@@ -3930,7 +4144,8 @@ q_command:register_q_command_block( "equal_super_2wire_escape_success",
         door_pos_equal_super_2wire_escape, chest_pos_equal_super_2wire_escape, chest_inv_equal_super_2wire_escape)
 
 
-q_command.texts.equal_super_3wire_escape =
+q_command.texts.equal_super_3wire_escape = {}
+q_command.texts.equal_super_3wire_escape.en =
 [[
 TLDR: Make the blue liquid levels correspond to an equal superposition
 of its eight basis states.
@@ -3947,6 +4162,8 @@ superposition consisting of 2^numQubits states.
 
 If the Q block turned gold, congratulations on solving the puzzle!
 ]]
+q_command.texts.equal_super_3wire_escape.es = q_command.texts.equal_super_3wire_escape.en
+q_command.texts.equal_super_3wire_escape.ja = q_command.texts.equal_super_3wire_escape.en
 q_command:register_help_button("equal_super_3wire_escape", "Equal superposition with three qubits", q_command.texts.equal_super_3wire_escape)
 local solution_statevector_equal_super_3wire_escape =
 {
@@ -4008,7 +4225,8 @@ q_command:register_q_command_block( "equal_super_3wire_escape_success",
         door_pos_equal_super_3wire_escape, chest_pos_equal_super_3wire_escape, chest_inv_equal_super_3wire_escape)
 
 
-q_command.texts.bell_phi_plus_escape =
+q_command.texts.bell_phi_plus_escape = {}
+q_command.texts.bell_phi_plus_escape.en =
 [[
 TLDR: Make the blue liquid levels correspond to a quantum state of
 sqrt(1/2) |00> + sqrt(1/2) |11> which is referred to as the phi+ Bell
@@ -4040,6 +4258,8 @@ wire as the Hadamard gate.
 
 If the Q block turned gold, congratulations on solving the puzzle!
 ]]
+q_command.texts.bell_phi_plus_escape.es = q_command.texts.bell_phi_plus_escape.en
+q_command.texts.bell_phi_plus_escape.ja = q_command.texts.bell_phi_plus_escape.en
 q_command:register_help_button("bell_phi_plus_escape", "Make the phi+ Bell state", q_command.texts.bell_phi_plus_escape)
 local solution_statevector_bell_phi_plus_escape =
 {
@@ -4083,7 +4303,8 @@ q_command:register_q_command_block( "bell_phi_plus_escape_success", "bell_phi_pl
         door_pos_bell_phi_plus_escape, chest_pos_bell_phi_plus_escape, chest_inv_bell_phi_plus_escape)
 
 
-q_command.texts.bell_phi_minus_escape =
+q_command.texts.bell_phi_minus_escape = {}
+q_command.texts.bell_phi_minus_escape.en =
 [[
 TLDR: Make the blue liquid levels correspond to a quantum state of
 sqrt(1/2) |00> - sqrt(1/2) |11> which is referred to as the phi- Bell
@@ -4106,6 +4327,8 @@ phase of pi radians.
 
 If the Q block turned gold, congratulations on solving the puzzle!
 ]]
+q_command.texts.bell_phi_minus_escape.es = q_command.texts.bell_phi_minus_escape.en
+q_command.texts.bell_phi_minus_escape.ja = q_command.texts.bell_phi_minus_escape.en
 q_command:register_help_button("bell_phi_minus_escape", "Make the phi- Bell state", q_command.texts.bell_phi_minus_escape)
 local solution_statevector_bell_phi_minus_escape =
 {
@@ -4149,7 +4372,8 @@ q_command:register_q_command_block( "bell_phi_minus_escape_success", "bell_phi_m
         door_pos_bell_phi_minus_escape, chest_pos_bell_phi_minus_escape, chest_inv_bell_phi_minus_escape)
 
 
-q_command.texts.bell_psi_plus_escape =
+q_command.texts.bell_psi_plus_escape = {}
+q_command.texts.bell_psi_plus_escape.en =
 [[
 TLDR: Make the blue liquid levels correspond to a quantum state of
 sqrt(1/2) |01> + sqrt(1/2) |10> which is referred to as the psi+ Bell
@@ -4173,6 +4397,8 @@ qubit will be measured as the opposite state.
 
 If the Q block turned gold, congratulations on solving the puzzle!
 ]]
+q_command.texts.bell_psi_plus_escape.es = q_command.texts.bell_psi_plus_escape.en
+q_command.texts.bell_psi_plus_escape.ja = q_command.texts.bell_psi_plus_escape.en
 q_command:register_help_button("bell_psi_plus_escape", "Make the psi+ Bell state", q_command.texts.bell_psi_plus_escape)
 local solution_statevector_bell_psi_plus_escape =
 {
@@ -4216,7 +4442,8 @@ q_command:register_q_command_block( "bell_psi_plus_escape_success", "bell_psi_pl
         door_pos_bell_psi_plus_escape, chest_pos_bell_psi_plus_escape, chest_inv_bell_psi_plus_escape)
 
 
-q_command.texts.bell_psi_minus_escape =
+q_command.texts.bell_psi_minus_escape = {}
+q_command.texts.bell_psi_minus_escape.en =
 [[
 TLDR: Make the blue liquid levels correspond to a quantum state of
 sqrt(1/2) |01> - sqrt(1/2) |10> which is referred to as the psi- Bell
@@ -4242,6 +4469,8 @@ qubit will be measured as the opposite state.
 
 If the Q block turned gold, congratulations on solving the puzzle!
 ]]
+q_command.texts.bell_psi_minus_escape.es = q_command.texts.bell_psi_minus_escape.en
+q_command.texts.bell_psi_minus_escape.ja = q_command.texts.bell_psi_minus_escape.en
 q_command:register_help_button("bell_psi_minus_escape", "Make the psi- Bell state", q_command.texts.bell_psi_minus_escape)
 local solution_statevector_bell_psi_minus_escape =
 {
@@ -4285,7 +4514,8 @@ q_command:register_q_command_block( "bell_psi_minus_escape_success", "bell_psi_m
         door_pos_bell_psi_minus_escape, chest_pos_bell_psi_minus_escape, chest_inv_bell_psi_minus_escape)
 
 
-q_command.texts.ghz_state_escape =
+q_command.texts.ghz_state_escape = {}
+q_command.texts.ghz_state_escape.en =
 [[
 TLDR: Make the blue liquid levels correspond to a quantum state of
 sqrt(1/2) |000> - sqrt(1/2) |111> which is referred to as the GHZ state.
@@ -4312,6 +4542,8 @@ blocks) results in either |000> or |111> each time.
 
 If the Q block turned gold, congratulations on solving the puzzle!
 ]]
+q_command.texts.ghz_state_escape.es = q_command.texts.ghz_state_escape.en
+q_command.texts.ghz_state_escape.ja = q_command.texts.ghz_state_escape.en
 q_command:register_help_button("ghz_state_escape", "Make the GHZ state", q_command.texts.ghz_state_escape)
 local solution_statevector_ghz_state_escape =
 {
@@ -4371,7 +4603,8 @@ q_command:register_q_command_block( "ghz_state_escape_success", "ghz_state_escap
         door_pos_ghz_state_escape, chest_pos_ghz_state_escape, chest_inv_ghz_state_escape)
 
 
-q_command.texts.y_z_rot_1wire_escape =
+q_command.texts.y_z_rot_1wire_escape = {}
+q_command.texts.y_z_rot_1wire_escape.en =
 [[
 TLDR: Make the blue liquid levels correspond to the following quantum
 state:
@@ -4387,6 +4620,8 @@ desired state is achieved.
 
 If the Q block turned gold, congratulations on solving the puzzle!
 ]]
+q_command.texts.y_z_rot_1wire_escape.es = q_command.texts.y_z_rot_1wire_escape.en
+q_command.texts.y_z_rot_1wire_escape.ja = q_command.texts.y_z_rot_1wire_escape.en
 q_command:register_help_button("y_z_rot_1wire_escape",
         "Rotate a qubit into a desired state", q_command.texts.y_z_rot_1wire_escape)
 local solution_statevector_y_z_rot_1wire_escape =
@@ -4425,7 +4660,8 @@ q_command:register_q_command_block( "y_z_rot_1wire_escape_success",
         door_pos_y_z_rot_1wire_escape, chest_pos_y_z_rot_1wire_escape, chest_inv_y_z_rot_1wire_escape)
 
 
-q_command.texts.phase_rot_2wire_escape =
+q_command.texts.phase_rot_2wire_escape = {}
+q_command.texts.phase_rot_2wire_escape.en =
 [[
 TLDR: Make the blue liquid levels correspond to the following quantum
 state:
@@ -4444,6 +4680,8 @@ converting changes in phase to changes in measurement probabilities.
 
 If the Q block turned gold, congratulations on solving the puzzle!
 ]]
+q_command.texts.phase_rot_2wire_escape.es = q_command.texts.phase_rot_2wire_escape.en
+q_command.texts.phase_rot_2wire_escape.ja = q_command.texts.phase_rot_2wire_escape.en
 q_command:register_help_button("phase_rot_2wire_escape",
         "Convert phase rotations into measurement probabilities", q_command.texts.phase_rot_2wire_escape)
 local solution_statevector_phase_rot_2wire_escape =
@@ -4493,7 +4731,8 @@ q_command:register_q_command_block( "phase_rot_2wire_escape_success",
 
 
 
-q_command.texts.notsingleplayer =
+q_command.texts.notsingleplayer = {}
+q_command.texts.notsingleplayer.en =
 [[
 You are now playing QiskitBlocks in multiplayer mode, but QiskitBlocks
 is optimized for the singleplayer mode.
@@ -4501,8 +4740,12 @@ is optimized for the singleplayer mode.
 Unless you are sure no other players will join, please exit now and
 start QiskitBlocks in singleplayer mode.
 ]]
+q_command.texts.notsingleplayer.es = q_command.texts.notsingleplayer.en
+q_command.texts.notsingleplayer.ja = q_command.texts.notsingleplayer.en
 
-q_command.texts.creative =
+
+q_command.texts.creative = {}
+q_command.texts.creative.en =
 [[
 The Creative Mode is turned on, but QiskitBlocks is designed to be
 played with the Creative Mode checkbox deselected.
@@ -4510,6 +4753,9 @@ played with the Creative Mode checkbox deselected.
 You can leave now by clicking the Leave QiskitBlocks button, or later by
 pressing [Esc].
 ]]
+q_command.texts.creative.es = q_command.texts.creative.en
+q_command.texts.creative.ja = q_command.texts.creative.en
+
 
 minetest.register_on_player_receive_fields(function(player, formname, fields)
     if(fields.leave) then
@@ -4526,7 +4772,7 @@ minetest.register_on_joinplayer(function(player)
 		"tablecolumns[text]"..
 		"tableoptions[background=#000000;highlight=#000000;border=false]"..
 		"table[0,0.25;12,5.2;creative_text;"..
-        q_command:convert_newlines(minetest.formspec_escape(S(q_command.texts.notsingleplayer)))..
+        q_command:convert_newlines(minetest.formspec_escape(S(q_command.texts.notsingleplayer[locale_lang])))..
 		"]"..
 		"button_exit[2.5,5.5;3,1;close;"..minetest.formspec_escape(S("Continue anyway")).."]"..
 		"button_exit[6.5,5.5;3,1;leave;"..minetest.formspec_escape(S("Leave QiskitBlocks")).."]"
@@ -4536,7 +4782,7 @@ minetest.register_on_joinplayer(function(player)
 		"tablecolumns[text]"..
 		"tableoptions[background=#000000;highlight=#000000;border=false]"..
 		"table[0,0.25;12,5.2;creative_text;"..
-        q_command:convert_newlines(minetest.formspec_escape(S(q_command.texts.creative)))..
+        q_command:convert_newlines(minetest.formspec_escape(S(q_command.texts.creative[locale_lang])))..
 		"]"..
 		"button_exit[2.5,5.5;3,1;close;"..minetest.formspec_escape(S("Continue anyway")).."]"..
 		"button_exit[6.5,5.5;3,1;leave;"..minetest.formspec_escape(S("Leave QiskitBlocks")).."]"
@@ -4553,6 +4799,7 @@ end)
 
 
 -- TODO: Remove this code after removing blocks in-world
+--[[
 local function register_sign(desc, def)
 	minetest.register_node("q_command:level_progression", {
 		description = desc,
@@ -4571,44 +4818,19 @@ local function register_sign(desc, def)
 			wall_bottom = {-0.4375, -0.5, -0.3125, 0.4375, -0.4375, 0.3125},
 			wall_side   = {-0.5, -0.3125, -0.4375, -0.4375, 0.3125, 0.4375},
 		},
-		groups = def.groups,
+		groups = {oddly_breakable_by_hand=2},
 		legacy_wallmounted = true,
 		sounds = def.sounds,
 
-		on_construct = function(pos)
-			--local n = minetest.get_node(pos)
-			local meta = minetest.get_meta(pos)
-			meta:set_string("formspec", "field[text;;${text}]")
-		end,
-		on_receive_fields = function(pos, formname, fields, sender)
-			--print("Sign at "..minetest.pos_to_string(pos).." got "..dump(fields))
-			local player_name = sender:get_player_name()
-			if minetest.is_protected(pos, player_name) then
-				minetest.record_protection_violation(pos, player_name)
-				return
-			end
-			local text = fields.text
-			if not text then
-				return
-			end
-			if string.len(text) > 512 then
-				minetest.chat_send_player(player_name, "Text too long")
-				return
-			end
-			minetest.log("action", (player_name or "") .. " wrote \"" ..
-				text .. "\" to sign at " .. minetest.pos_to_string(pos))
-			local meta = minetest.get_meta(pos)
-			meta:set_string("text", text)
-			meta:set_string("infotext", '"' .. text .. '"')
-		end,
 	})
 end
 
 -- TODO: Remove this code after removing blocks in-world
 register_sign("Level sign", "Wooden", {
 	--sounds = default.node_sound_wood_defaults(),
-	groups = {choppy = 2, attached_node = 1, flammable = 2, oddly_breakable_by_hand = 3}
+	groups = {oddly_breakable_by_hand = 2}
 })
+--]]
 
 minetest.register_node("q_command:block_no_function", {
     description = "Non-functional Q command block",
