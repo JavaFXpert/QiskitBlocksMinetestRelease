@@ -478,7 +478,7 @@ end
 
 
 function q_command:create_qasm_for_node(circuit_node_pos, wire_num,
-                                        include_measurement_blocks, c_if_table, tomo_meas_basis)
+                                        include_measurement_blocks, c_if_table, tomo_meas_basis, exclude_reset_blocks)
     local qasm_str = ""
     local circuit_node_block = circuit_blocks:get_circuit_block(circuit_node_pos)
     local q_block = q_command:get_q_command_block(circuit_node_pos)
@@ -621,9 +621,11 @@ function q_command:create_qasm_for_node(circuit_node_pos, wire_num,
                 qasm_str = qasm_str .. 'measure q[' .. wire_num_idx .. '] -> c' .. wire_num_idx .. '[0];'
             end
         elseif node_type == CircuitNodeTypes.QUBIT_BASIS then
-            qasm_str = qasm_str .. 'reset q[' .. wire_num_idx .. '];'
-            if circuit_node_block.get_node_name():sub(-2) == "_1" then
-                qasm_str = qasm_str .. 'x q[' .. wire_num_idx .. '];'
+            if not exclude_reset_blocks then
+                qasm_str = qasm_str .. 'reset q[' .. wire_num_idx .. '];'
+                if circuit_node_block.get_node_name():sub(-2) == "_1" then
+                    qasm_str = qasm_str .. 'x q[' .. wire_num_idx .. '];'
+                end
             end
         elseif node_type == CircuitNodeTypes.CONNECTOR_M then
             -- Connector to wire extension, so traverse
@@ -647,22 +649,22 @@ function q_command:create_qasm_for_node(circuit_node_pos, wire_num,
 
                         if wire_extension_dir_str == "+X" then
                             circ_node_pos = {x = wire_extension_circuit_pos.x,
-                                                y = wire_extension_circuit_pos.y,
-                                                z = wire_extension_circuit_pos.z - column_num + 1}
+                                             y = wire_extension_circuit_pos.y,
+                                             z = wire_extension_circuit_pos.z - column_num + 1}
                         elseif wire_extension_dir_str == "-X" then
                             circ_node_pos = {x = wire_extension_circuit_pos.x,
-                                                y = wire_extension_circuit_pos.y,
-                                                z = wire_extension_circuit_pos.z + column_num - 1}
+                                             y = wire_extension_circuit_pos.y,
+                                             z = wire_extension_circuit_pos.z + column_num - 1}
                         elseif wire_extension_dir_str == "-Z" then
                             circ_node_pos = {x = wire_extension_circuit_pos.x - column_num + 1,
-                                                y = wire_extension_circuit_pos.y,
-                                                z = wire_extension_circuit_pos.z}
+                                             y = wire_extension_circuit_pos.y,
+                                             z = wire_extension_circuit_pos.z}
                         end
 
                         qasm_str = qasm_str ..
-                                 q_command:create_qasm_for_node(circ_node_pos,
-                                         extension_wire_num, include_measurement_blocks,
-                                         c_if_table, tomo_meas_basis)
+                                q_command:create_qasm_for_node(circ_node_pos,
+                                        extension_wire_num, include_measurement_blocks,
+                                        c_if_table, tomo_meas_basis, exclude_reset_blocks)
                     end
                 end
             end
@@ -714,7 +716,7 @@ function q_command:create_qasm_for_node(circuit_node_pos, wire_num,
     return qasm_str
 end
 
-function q_command:compute_circuit(circuit_block, include_measurement_blocks, tomo_meas_basis)
+function q_command:compute_circuit(circuit_block, include_measurement_blocks, tomo_meas_basis, exclude_reset_blocks)
     local num_wires = circuit_block.get_circuit_num_wires()
     local num_columns = circuit_block.get_circuit_num_columns()
     local circuit_dir_str = circuit_block.get_circuit_dir_str()
@@ -763,7 +765,7 @@ function q_command:compute_circuit(circuit_block, include_measurement_blocks, to
 
 
             qasm_str = qasm_str .. q_command:create_qasm_for_node(circuit_node_pos, wire_num,
-                    include_measurement_blocks, c_if_table, tomo_meas_basis)
+                    include_measurement_blocks, c_if_table, tomo_meas_basis, exclude_reset_blocks)
         end
     end
 
@@ -855,9 +857,30 @@ function q_command:parse_json_statevector(sv_data)
     return statevector
 end
 
+function q_command:parse_json_unitary(uni_data)
+    local unitary = {}
+    local obj, pos, err = json.decode (uni_data, 1, nil)
+    if err then
+        minetest.debug ("Error in parse_json_unitary:", err)
+    else
+        local temp_unitary_row = obj.__ndarray__
+        for i = 1,#temp_unitary_row do
+            unitary[i] = temp_unitary_row[i]
+            local temp_unitary_col = temp_unitary_row[i]
+            for j = 1,#temp_unitary_col do
+                unitary[i][j] = complex.new(temp_unitary_col[j].__complex__[1],
+                    temp_unitary_col[j].__complex__[2])
+
+            end
+        end
+    end
+    return unitary
+end
+
 function q_command:register_q_command_block(suffix_correct_solution,
                                             suffix_incorrect_solution,
                                             correct_solution_statevector,
+                                            correct_solution_unitary,
                                             block_represents_correct_solution,
                                             door_pos,
                                             chest_pos,
@@ -926,7 +949,8 @@ function q_command:register_q_command_block(suffix_correct_solution,
                 end
 
                 local circuit_block = circuit_blocks:get_circuit_block(q_block.get_circuit_pos())
-                local qasm_with_measurement_str = q_command:compute_circuit(circuit_block, true)
+                local qasm_with_measurement_str = q_command:compute_circuit(circuit_block,
+                        true, 0, false)
 
 		        formspec = "size[12,7]"..
                     "textarea[0.3,0.3;12,7;qasm_str;To run on a real quantum computer copy/paste into Circuit Composer at quantum-computing.ibm.com;"..
@@ -1037,15 +1061,28 @@ function q_command:register_q_command_block(suffix_correct_solution,
                     local circuit_grid_pos = q_block.get_circuit_pos()
                     local circuit_block = circuit_blocks:get_circuit_block(circuit_grid_pos)
 
-                    local qasm_str = q_command:compute_circuit(circuit_block, false)
-                    local qasm_with_measurement_str = q_command:compute_circuit(circuit_block, true)
-                    local qasm_with_tomo_x_str = q_command:compute_circuit(circuit_block, true, 1)
-                    local qasm_with_tomo_y_str = q_command:compute_circuit(circuit_block, true, 2)
-                    local qasm_with_tomo_z_str = q_command:compute_circuit(circuit_block, true, 3)
+                    local qasm_str = q_command:compute_circuit(circuit_block, false,
+                            0, false)
+                    local qasm_for_unitary_str = q_command:compute_circuit(circuit_block,
+                            false, 0, true)
+                    local qasm_with_measurement_str = q_command:compute_circuit(circuit_block,
+                            true, 0, false)
+                    local qasm_with_tomo_x_str = q_command:compute_circuit(circuit_block, true,
+                            1, false)
+                    local qasm_with_tomo_y_str = q_command:compute_circuit(circuit_block, true,
+                            2, false)
+                    local qasm_with_tomo_z_str = q_command:compute_circuit(circuit_block, true,
+                            3, false)
 
                     local http_request_statevector = {
                         url = qiskit_service_host .. "/api/run/statevector?backend=statevector_simulator&qasm=" ..
                                 url_code.urlencode(qasm_str),
+                        timeout = qiskit_service_timeout
+                    }
+
+                    local http_request_unitary = {
+                        url = qiskit_service_host .. "/api/run/unitary?backend=unitary_simulator&qasm=" ..
+                                url_code.urlencode(qasm_for_unitary_str),
                         timeout = qiskit_service_timeout
                     }
 
@@ -1315,6 +1352,63 @@ function q_command:register_q_command_block(suffix_correct_solution,
                     end
 
 
+                    local function react_solution_attempt(player_correct)
+                        local door = nil
+                        if door_pos and doors then
+                            door = doors.get(door_pos)
+                        end
+
+                        if player_correct then
+                            if mpd.playing then
+                                mpd.play_song(MUSIC_CONGRATS)
+                            end
+                            mpd.queue_next_song(MUSIC_ACTIVE)
+
+                            if door and door.open then
+                                door:open(nil)
+                            end
+
+                            -- If there is a chest, restock it
+                            if chest_pos and chest_inv then
+                                local chest_meta = minetest.get_meta(chest_pos)
+                                chest_meta:from_table(chest_inv)
+
+                                --[[
+                                local player_inv = minetest.get_player_by_name("singleplayer"):get_inventory()
+                                local player_inv_main_size = player_inv:get_size("main")
+                                player_inv:set_size("main", 0)
+                                player_inv:set_size("main", player_inv_main_size)
+                                --]]
+                            end
+
+                        else
+                            if mpd.playing then
+                                if mpd.playing == MUSIC_CHILL then
+                                    mpd.play_song(MUSIC_ACTIVE)
+                                elseif mpd.playing == MUSIC_ACTIVE then
+                                    mpd.queue_next_song(MUSIC_ACTIVE)
+                                elseif mpd.playing == MUSIC_EXCITED then
+                                    mpd.queue_next_song(MUSIC_ACTIVE)
+                                elseif mpd.playing == MUSIC_CONGRATS then
+                                    mpd.queue_next_song(MUSIC_ACTIVE)
+                                end
+                            end
+
+                            if door and door.close then
+                                door:close(nil)
+                            end
+                        end
+
+                        if LOG_DEBUG then
+                            minetest.debug("player_correct: " .. tostring(player_correct))
+                        end
+                        if (player_correct and not block_represents_correct_solution) or
+                                (not player_correct and block_represents_correct_solution) then
+                            minetest.swap_node(q_block.get_node_pos(), {name = other_q_block_node_name})
+                        end
+                    end
+
+
                     local function process_backend_statevector_result(http_request_response)
                         if LOG_DEBUG then
                             minetest.debug("http_request_response (statevector):\n" .. dump(http_request_response))
@@ -1324,81 +1418,26 @@ function q_command:register_q_command_block(suffix_correct_solution,
                                 not http_request_response.timeout then
 
                             local sv_data = http_request_response.data
-
                             local statevector = q_command:parse_json_statevector(sv_data)
-
                             -- minetest.debug("statevector:\n" .. dump(statevector))
 
-                            -- minetest.debug("correct_solution_statevector:\n" .. dump(correct_solution_statevector))
-
-                            local is_correct_solution = true
-                            if statevector and correct_solution_statevector and
-                                    #statevector == #correct_solution_statevector then
-                                for sv_idx = 1, #statevector do
-                                    if not complex.nearly_equals(statevector[sv_idx],
-                                            correct_solution_statevector[sv_idx]) then
-                                        is_correct_solution = false
-                                        break
+                            -- Only check for a correct player solution if correct_solution_statevector exists
+                            if correct_solution_statevector then
+                                --minetest.debug("correct_solution_statevector:\n" .. dump(correct_solution_statevector))
+                                local is_correct_solution_statevector = true
+                                if statevector and correct_solution_statevector and
+                                        #statevector == #correct_solution_statevector then
+                                    for sv_idx = 1, #statevector do
+                                        if not complex.nearly_equals(statevector[sv_idx],
+                                                correct_solution_statevector[sv_idx]) then
+                                            is_correct_solution_statevector = false
+                                            break
+                                        end
                                     end
+                                else
+                                    is_correct_solution_statevector = false
                                 end
-
-                            else
-                                is_correct_solution = false
-                                --minetest.debug("mpd.playing:" .. tostring(mpd.playing))
-                            end
-
-                            local door = nil
-                            if door_pos and doors then
-                                door = doors.get(door_pos)
-                            end
-
-                            if is_correct_solution then
-                                if mpd.playing then
-                                    mpd.play_song(MUSIC_CONGRATS)
-                                end
-                                mpd.queue_next_song(MUSIC_ACTIVE)
-
-                                if door and door.open then
-                                    door:open(nil)
-                                end
-
-                                -- If there is a chest, erase player inventory and
-                                -- restock the chest
-                                if chest_pos and chest_inv then
-                                    local chest_meta = minetest.get_meta(chest_pos)
-                                    chest_meta:from_table(chest_inv)
-
-                                    local player_inv = minetest.get_player_by_name("singleplayer"):get_inventory()
-                                    local player_inv_main_size = player_inv:get_size("main")
-                                    player_inv:set_size("main", 0)
-                                    player_inv:set_size("main", player_inv_main_size)
-                                end
-
-                            else
-                                if mpd.playing then
-                                    if mpd.playing == MUSIC_CHILL then
-                                        mpd.play_song(MUSIC_ACTIVE)
-                                    elseif mpd.playing == MUSIC_ACTIVE then
-                                        mpd.queue_next_song(MUSIC_ACTIVE)
-                                    elseif mpd.playing == MUSIC_EXCITED then
-                                        mpd.queue_next_song(MUSIC_ACTIVE)
-                                    elseif mpd.playing == MUSIC_CONGRATS then
-                                        mpd.queue_next_song(MUSIC_ACTIVE)
-                                    end
-                                end
-
-                                if door and door.close then
-                                    door:close(nil)
-                                end
-                            end
-
-                            if LOG_DEBUG then
-                                minetest.debug("is_correct_solution: " .. tostring(is_correct_solution))
-                            end
-                            if (is_correct_solution and not block_represents_correct_solution) or
-                                    (not is_correct_solution and block_represents_correct_solution) then
-                                minetest.swap_node(q_block.get_node_pos(), {name = other_q_block_node_name})
-                            else
+                                react_solution_attempt(is_correct_solution_statevector)
                             end
 
                             -- Update the histogram
@@ -1620,6 +1659,46 @@ function q_command:register_q_command_block(suffix_correct_solution,
                     end
 
 
+                    local function process_backend_unitary_result(http_request_response)
+                        if LOG_DEBUG then
+                            minetest.debug("http_request_response (unitary):\n" .. dump(http_request_response))
+                        end
+                        if http_request_response.succeeded and
+                                http_request_response.completed and
+                                not http_request_response.timeout then
+
+                            local uni_data = http_request_response.data
+                            local unitary = q_command:parse_json_unitary(uni_data)
+                            --minetest.debug("unitary:\n" .. dump(unitary))
+
+                            -- Only check for a correct player solution if correct_solution_unitary exists
+                            if correct_solution_unitary then
+                                --minetest.debug("correct_solution_unitary:\n" .. dump(correct_solution_unitary))
+                                local is_correct_solution_unitary = true
+                                if unitary and correct_solution_unitary and
+                                        #unitary == #correct_solution_unitary then
+                                    for uni_row_idx = 1, #unitary do
+                                        for uni_col_idx = 1, #unitary do
+                                            if not complex.nearly_equals(unitary[uni_row_idx][uni_col_idx],
+                                                    correct_solution_unitary[uni_row_idx][uni_col_idx]) then
+                                                is_correct_solution_unitary = false
+                                                break
+                                            end
+                                        end
+                                    end
+                                else
+                                    is_correct_solution_unitary = false
+                                end
+                                minetest.debug("is_correct_solution_unitary: " .. tostring(is_correct_solution_unitary))
+                                react_solution_attempt(is_correct_solution_unitary)
+                            end
+                        else
+                            minetest.debug("Call to unitary_simulator Didn't succeed")
+                        end
+
+                    end
+
+
 
 
                     local function common_process_backend_qasm_result(http_request_response, state_tomo_basis)
@@ -1769,6 +1848,12 @@ function q_command:register_q_command_block(suffix_correct_solution,
                     else
                         -- Only run statevector_simulator
                         request_http_api.fetch(http_request_statevector, process_backend_statevector_result)
+
+                        -- If there is a correct unitary solution, run the unitary_simulator
+                        -- TODO: Add code that creates and checks for a correct unitary
+                        if correct_solution_unitary then
+                            request_http_api.fetch(http_request_unitary, process_backend_unitary_result)
+                        end
                     end
                 end
 
@@ -2815,9 +2900,9 @@ local solution_statevector_x_gate =
 	}
 }
 q_command:register_q_command_block( "x_gate_success", "x_gate",
-        solution_statevector_x_gate, true)
+        solution_statevector_x_gate, nil, true)
 q_command:register_q_command_block( "x_gate_success", "x_gate",
-        solution_statevector_x_gate, false)
+        solution_statevector_x_gate, nil,false)
 
 
 q_command.texts.h_gate = {}
@@ -2868,9 +2953,9 @@ local solution_statevector_h_gate =
 	}
 }
 q_command:register_q_command_block( "h_gate_success", "h_gate",
-        solution_statevector_h_gate, true)
+        solution_statevector_h_gate, nil,true)
 q_command:register_q_command_block( "h_gate_success", "h_gate",
-        solution_statevector_h_gate, false)
+        solution_statevector_h_gate, nil,false)
 
 
 q_command.texts.cnot_gate_puzzle = {}
@@ -2933,9 +3018,9 @@ local solution_statevector_cnot_gate_puzzle =
 	}
 }
 q_command:register_q_command_block( "cnot_gate_puzzle_success", "cnot_gate_puzzle",
-        solution_statevector_cnot_gate_puzzle, true, {x = 0, y = 0, z = 0})
+        solution_statevector_cnot_gate_puzzle, nil,true, {x = 0, y = 0, z = 0})
 q_command:register_q_command_block( "cnot_gate_puzzle_success", "cnot_gate_puzzle",
-        solution_statevector_cnot_gate_puzzle, false, {x = 0, y = 0, z = 0})
+        solution_statevector_cnot_gate_puzzle, nil,false, {x = 0, y = 0, z = 0})
 
 
 q_command.texts.hxx_gates = {}
@@ -2997,9 +3082,9 @@ local solution_statevector_hxx_gates =
 	}
 }
 q_command:register_q_command_block( "hxx_gates_success", "hxx_gates",
-        solution_statevector_hxx_gates, true)
+        solution_statevector_hxx_gates, nil,true)
 q_command:register_q_command_block( "hxx_gates_success", "hxx_gates",
-        solution_statevector_hxx_gates, false)
+        solution_statevector_hxx_gates, nil,false)
 
 
 q_command.texts.bell_phi_plus = {}
@@ -3053,9 +3138,9 @@ local solution_statevector_bell_phi_plus =
 	}
 }
 q_command:register_q_command_block( "bell_phi_plus_success", "bell_phi_plus",
-        solution_statevector_bell_phi_plus, true)
+        solution_statevector_bell_phi_plus, nil,true)
 q_command:register_q_command_block( "bell_phi_plus_success", "bell_phi_plus",
-        solution_statevector_bell_phi_plus, false)
+        solution_statevector_bell_phi_plus, nil,false)
 
 
 q_command.texts.bell_phi_minus = {}
@@ -3100,9 +3185,9 @@ local solution_statevector_bell_phi_minus =
 	}
 }
 q_command:register_q_command_block( "bell_phi_minus_success", "bell_phi_minus",
-        solution_statevector_bell_phi_minus, true)
+        solution_statevector_bell_phi_minus, nil,true)
 q_command:register_q_command_block( "bell_phi_minus_success", "bell_phi_minus",
-        solution_statevector_bell_phi_minus, false)
+        solution_statevector_bell_phi_minus, nil,false)
 
 
 q_command.texts.bell_psi_plus = {}
@@ -3148,9 +3233,9 @@ local solution_statevector_bell_psi_plus =
 	}
 }
 q_command:register_q_command_block( "bell_psi_plus_success", "bell_psi_plus",
-        solution_statevector_bell_psi_plus, true)
+        solution_statevector_bell_psi_plus, nil,true)
 q_command:register_q_command_block( "bell_psi_plus_success", "bell_psi_plus",
-        solution_statevector_bell_psi_plus, false)
+        solution_statevector_bell_psi_plus, nil,false)
 
 
 q_command.texts.bell_psi_minus = {}
@@ -3198,9 +3283,9 @@ local solution_statevector_bell_psi_minus =
 	}
 }
 q_command:register_q_command_block( "bell_psi_minus_success", "bell_psi_minus",
-        solution_statevector_bell_psi_minus, true)
+        solution_statevector_bell_psi_minus, nil,true)
 q_command:register_q_command_block( "bell_psi_minus_success", "bell_psi_minus",
-        solution_statevector_bell_psi_minus, false)
+        solution_statevector_bell_psi_minus, nil,false)
 
 
 q_command.texts.ghz_state = {}
@@ -3266,9 +3351,9 @@ local solution_statevector_ghz_state =
 	}
 }
 q_command:register_q_command_block( "ghz_state_success", "ghz_state",
-        solution_statevector_ghz_state, true)
+        solution_statevector_ghz_state, nil,true)
 q_command:register_q_command_block( "ghz_state_success", "ghz_state",
-        solution_statevector_ghz_state, false)
+        solution_statevector_ghz_state, nil,false)
 
 
 q_command.texts.equal_super_2wire = {}
@@ -3313,10 +3398,10 @@ local solution_statevector_equal_super_2wire =
 }
 q_command:register_q_command_block( "equal_super_2wire_success",
         "equal_super_2wire",
-        solution_statevector_equal_super_2wire, true)
+        solution_statevector_equal_super_2wire, nil,true)
 q_command:register_q_command_block( "equal_super_2wire_success",
         "equal_super_2wire",
-        solution_statevector_equal_super_2wire, false)
+        solution_statevector_equal_super_2wire, nil,false)
 
 
 q_command.texts.rotate_yz_gates_puzzle = {}
@@ -3377,9 +3462,9 @@ local solution_statevector_rotate_yz_gates_puzzle =
 	}
 }
 q_command:register_q_command_block( "rotate_yz_gates_puzzle_success", "rotate_yz_gates_puzzle",
-        solution_statevector_rotate_yz_gates_puzzle, true)
+        solution_statevector_rotate_yz_gates_puzzle, nil,true)
 q_command:register_q_command_block( "rotate_yz_gates_puzzle_success", "rotate_yz_gates_puzzle",
-        solution_statevector_rotate_yz_gates_puzzle, false)
+        solution_statevector_rotate_yz_gates_puzzle, nil,false)
 
 
 q_command.texts.swap_gate_puzzle = {}
@@ -3433,9 +3518,9 @@ local solution_statevector_swap_gate_puzzle =
 	}
 }
 q_command:register_q_command_block( "swap_gate_puzzle_success", "swap_gate_puzzle",
-        solution_statevector_swap_gate_puzzle, true)
+        solution_statevector_swap_gate_puzzle, nil,true)
 q_command:register_q_command_block( "swap_gate_puzzle_success", "swap_gate_puzzle",
-        solution_statevector_swap_gate_puzzle, false)
+        solution_statevector_swap_gate_puzzle, nil,false)
 
 
 q_command.texts.deutsch_algo_puzzle = {}
@@ -3471,9 +3556,9 @@ local solution_statevector_deutsch_algo_puzzle =
 	}
 }
 q_command:register_q_command_block( "deutsch_algo_puzzle_success", "deutsch_algo_puzzle",
-        solution_statevector_deutsch_algo_puzzle, true)
+        solution_statevector_deutsch_algo_puzzle, nil,true)
 q_command:register_q_command_block( "deutsch_algo_puzzle_success", "deutsch_algo_puzzle",
-        solution_statevector_deutsch_algo_puzzle, false)
+        solution_statevector_deutsch_algo_puzzle, nil,false)
 
 
 q_command.texts.quantum_teleportation = {}
@@ -3539,13 +3624,13 @@ local solution_statevector_quantum_teleportation =
 }
 q_command:register_q_command_block( "quantum_teleportation_success",
         "quantum_teleportation",
-        solution_statevector_quantum_teleportation, true)
+        solution_statevector_quantum_teleportation, nil,true)
 q_command:register_q_command_block( "quantum_teleportation_success",
         "quantum_teleportation",
-        solution_statevector_quantum_teleportation, false)
+        solution_statevector_quantum_teleportation, nil,false)
 
 
--- Escape room puzzles -------------------------------------------------
+-- Escape room puzzles Level I -------------------------------------------------
 q_command.texts.x_gate_escape = {}
 q_command.texts.x_gate_escape.en =
 [[
@@ -3612,10 +3697,10 @@ local chest_inv_x_gate_escape = {
     }
 }
 q_command:register_q_command_block( "x_gate_escape_success", "x_gate_escape",
-        solution_statevector_x_gate_escape, true,
+        solution_statevector_x_gate_escape, nil,true,
         door_pos_x_gate_escape, chest_pos_x_gate_escape, chest_inv_x_gate_escape)
 q_command:register_q_command_block( "x_gate_escape_success", "x_gate_escape",
-        solution_statevector_x_gate_escape, false,
+        solution_statevector_x_gate_escape, nil,false,
         door_pos_x_gate_escape, chest_pos_x_gate_escape, chest_inv_x_gate_escape)
 
 
@@ -3689,10 +3774,10 @@ local chest_inv_x_gates_2_wire = {
 }
 q_command:register_q_command_block( "x_gates_2_wire_success",
         "x_gates_2_wire",
-        solution_statevector_x_gates_2_wire, true,
+        solution_statevector_x_gates_2_wire, nil,true,
         door_pos_x_gates_2_wire, chest_pos_x_gates_2_wire, chest_inv_x_gates_2_wire)
 q_command:register_q_command_block( "x_gates_2_wire_success", "x_gates_2_wire",
-        solution_statevector_x_gates_2_wire, false,
+        solution_statevector_x_gates_2_wire, nil,false,
         door_pos_x_gates_2_wire, chest_pos_x_gates_2_wire, chest_inv_x_gates_2_wire)
 
 
@@ -3782,10 +3867,10 @@ local chest_inv_x_gates_3_wire = {
 }
 q_command:register_q_command_block( "x_gates_3_wire_success",
         "x_gates_3_wire",
-        solution_statevector_x_gates_3_wire, true,
+        solution_statevector_x_gates_3_wire, nil,true,
         door_pos_x_gates_3_wire, chest_pos_x_gates_3_wire, chest_inv_x_gates_3_wire)
 q_command:register_q_command_block( "x_gates_3_wire_success", "x_gates_3_wire",
-        solution_statevector_x_gates_3_wire, false,
+        solution_statevector_x_gates_3_wire, nil,false,
         door_pos_x_gates_3_wire, chest_pos_x_gates_3_wire, chest_inv_x_gates_3_wire)
 
 
@@ -3852,10 +3937,10 @@ local chest_inv_h_gate_escape = {
     }
 }
 q_command:register_q_command_block( "h_gate_escape_success", "h_gate_escape",
-        solution_statevector_h_gate_escape, true,
+        solution_statevector_h_gate_escape, nil,true,
         door_pos_h_gate_escape, chest_pos_h_gate_escape, chest_inv_h_gate_escape)
 q_command:register_q_command_block( "h_gate_escape_success", "h_gate_escape",
-        solution_statevector_h_gate_escape, false,
+        solution_statevector_h_gate_escape, nil,false,
         door_pos_h_gate_escape, chest_pos_h_gate_escape, chest_inv_h_gate_escape)
 
 
@@ -3924,10 +4009,10 @@ local chest_inv_h_x_gate = {
     }
 }
 q_command:register_q_command_block( "h_x_gate_success", "h_x_gate",
-        solution_statevector_h_x_gate, true,
+        solution_statevector_h_x_gate, nil,true,
         door_pos_h_x_gate, chest_pos_h_x_gate, chest_inv_h_x_gate)
 q_command:register_q_command_block( "h_x_gate_success", "h_x_gate",
-        solution_statevector_h_x_gate, false,
+        solution_statevector_h_x_gate, nil,false,
         door_pos_h_x_gate, chest_pos_h_x_gate, chest_inv_h_x_gate)
 
 
@@ -3990,10 +4075,10 @@ local chest_inv_h_z_gate = {
     }
 }
 q_command:register_q_command_block( "h_z_gate_success", "h_z_gate",
-        solution_statevector_h_z_gate, true,
+        solution_statevector_h_z_gate, nil,true,
         door_pos_h_z_gate, chest_pos_h_z_gate, chest_inv_h_z_gate)
 q_command:register_q_command_block( "h_z_gate_success", "h_z_gate",
-        solution_statevector_h_z_gate, false,
+        solution_statevector_h_z_gate, nil,false,
         door_pos_h_z_gate, chest_pos_h_z_gate, chest_inv_h_z_gate)
 
 
@@ -4072,10 +4157,10 @@ local chest_inv_hxx_gates_escape = {
     }
 }
 q_command:register_q_command_block( "hxx_gates_escape_success", "hxx_gates_escape",
-        solution_statevector_hxx_gates_escape, true,
+        solution_statevector_hxx_gates_escape, nil,true,
         door_pos_hxx_gates_escape, chest_pos_hxx_gates_escape, chest_inv_hxx_gates_escape)
 q_command:register_q_command_block( "hxx_gates_escape_success", "hxx_gates_escape",
-        solution_statevector_hxx_gates_escape, false,
+        solution_statevector_hxx_gates_escape, nil,false,
         door_pos_hxx_gates_escape, chest_pos_hxx_gates_escape, chest_inv_hxx_gates_escape)
 
 
@@ -4136,11 +4221,11 @@ local chest_inv_equal_super_2wire_escape = {
 }
 q_command:register_q_command_block( "equal_super_2wire_escape_success",
         "equal_super_2wire_escape",
-        solution_statevector_equal_super_2wire_escape, true,
+        solution_statevector_equal_super_2wire_escape, nil,true,
         door_pos_equal_super_2wire_escape, chest_pos_equal_super_2wire_escape, chest_inv_equal_super_2wire_escape)
 q_command:register_q_command_block( "equal_super_2wire_escape_success",
         "equal_super_2wire_escape",
-        solution_statevector_equal_super_2wire_escape, false,
+        solution_statevector_equal_super_2wire_escape, nil,false,
         door_pos_equal_super_2wire_escape, chest_pos_equal_super_2wire_escape, chest_inv_equal_super_2wire_escape)
 
 
@@ -4217,11 +4302,11 @@ local chest_inv_equal_super_3wire_escape = {
 }
 q_command:register_q_command_block( "equal_super_3wire_escape_success",
         "equal_super_3wire_escape",
-        solution_statevector_equal_super_3wire_escape, true,
+        solution_statevector_equal_super_3wire_escape, nil,true,
         door_pos_equal_super_3wire_escape, chest_pos_equal_super_3wire_escape, chest_inv_equal_super_3wire_escape)
 q_command:register_q_command_block( "equal_super_3wire_escape_success",
         "equal_super_3wire_escape",
-        solution_statevector_equal_super_3wire_escape, false,
+        solution_statevector_equal_super_3wire_escape, nil,false,
         door_pos_equal_super_3wire_escape, chest_pos_equal_super_3wire_escape, chest_inv_equal_super_3wire_escape)
 
 
@@ -4296,10 +4381,10 @@ local chest_inv_bell_phi_plus_escape = {
     }
 }
 q_command:register_q_command_block( "bell_phi_plus_escape_success", "bell_phi_plus_escape",
-        solution_statevector_bell_phi_plus_escape, true,
+        solution_statevector_bell_phi_plus_escape, nil,true,
         door_pos_bell_phi_plus_escape, chest_pos_bell_phi_plus_escape, chest_inv_bell_phi_plus_escape)
 q_command:register_q_command_block( "bell_phi_plus_escape_success", "bell_phi_plus_escape",
-        solution_statevector_bell_phi_plus_escape, false,
+        solution_statevector_bell_phi_plus_escape, nil,false,
         door_pos_bell_phi_plus_escape, chest_pos_bell_phi_plus_escape, chest_inv_bell_phi_plus_escape)
 
 
@@ -4365,10 +4450,10 @@ local chest_inv_bell_phi_minus_escape = {
     }
 }
 q_command:register_q_command_block( "bell_phi_minus_escape_success", "bell_phi_minus_escape",
-        solution_statevector_bell_phi_minus_escape, true,
+        solution_statevector_bell_phi_minus_escape, nil,true,
         door_pos_bell_phi_minus_escape, chest_pos_bell_phi_minus_escape, chest_inv_bell_phi_minus_escape)
 q_command:register_q_command_block( "bell_phi_minus_escape_success", "bell_phi_minus_escape",
-        solution_statevector_bell_phi_minus_escape, false,
+        solution_statevector_bell_phi_minus_escape, nil,false,
         door_pos_bell_phi_minus_escape, chest_pos_bell_phi_minus_escape, chest_inv_bell_phi_minus_escape)
 
 
@@ -4435,10 +4520,10 @@ local chest_inv_bell_psi_plus_escape = {
     }
 }
 q_command:register_q_command_block( "bell_psi_plus_escape_success", "bell_psi_plus_escape",
-        solution_statevector_bell_psi_plus_escape, true,
+        solution_statevector_bell_psi_plus_escape, nil,true,
         door_pos_bell_psi_plus_escape, chest_pos_bell_psi_plus_escape, chest_inv_bell_psi_plus_escape)
 q_command:register_q_command_block( "bell_psi_plus_escape_success", "bell_psi_plus_escape",
-        solution_statevector_bell_psi_plus_escape, false,
+        solution_statevector_bell_psi_plus_escape, nil,false,
         door_pos_bell_psi_plus_escape, chest_pos_bell_psi_plus_escape, chest_inv_bell_psi_plus_escape)
 
 
@@ -4507,10 +4592,10 @@ local chest_inv_bell_psi_minus_escape = {
     }
 }
 q_command:register_q_command_block( "bell_psi_minus_escape_success", "bell_psi_minus_escape",
-        solution_statevector_bell_psi_minus_escape, true,
+        solution_statevector_bell_psi_minus_escape, nil,true,
         door_pos_bell_psi_minus_escape, chest_pos_bell_psi_minus_escape, chest_inv_bell_psi_minus_escape)
 q_command:register_q_command_block( "bell_psi_minus_escape_success", "bell_psi_minus_escape",
-        solution_statevector_bell_psi_minus_escape, false,
+        solution_statevector_bell_psi_minus_escape, nil,false,
         door_pos_bell_psi_minus_escape, chest_pos_bell_psi_minus_escape, chest_inv_bell_psi_minus_escape)
 
 
@@ -4596,10 +4681,10 @@ local chest_inv_ghz_state_escape = {
     }
 }
 q_command:register_q_command_block( "ghz_state_escape_success", "ghz_state_escape",
-        solution_statevector_ghz_state_escape, true,
+        solution_statevector_ghz_state_escape, nil,true,
         door_pos_ghz_state_escape, chest_pos_ghz_state_escape, chest_inv_ghz_state_escape)
 q_command:register_q_command_block( "ghz_state_escape_success", "ghz_state_escape",
-        solution_statevector_ghz_state_escape, false,
+        solution_statevector_ghz_state_escape, nil,false,
         door_pos_ghz_state_escape, chest_pos_ghz_state_escape, chest_inv_ghz_state_escape)
 
 
@@ -4652,11 +4737,11 @@ local chest_inv_y_z_rot_1wire_escape = {
 }
 q_command:register_q_command_block( "y_z_rot_1wire_escape_success",
         "y_z_rot_1wire_escape",
-        solution_statevector_y_z_rot_1wire_escape, true,
+        solution_statevector_y_z_rot_1wire_escape, nil,true,
         door_pos_y_z_rot_1wire_escape, chest_pos_y_z_rot_1wire_escape, chest_inv_y_z_rot_1wire_escape)
 q_command:register_q_command_block( "y_z_rot_1wire_escape_success",
         "y_z_rot_1wire_escape",
-        solution_statevector_y_z_rot_1wire_escape, false,
+        solution_statevector_y_z_rot_1wire_escape, nil,false,
         door_pos_y_z_rot_1wire_escape, chest_pos_y_z_rot_1wire_escape, chest_inv_y_z_rot_1wire_escape)
 
 
@@ -4721,13 +4806,781 @@ local chest_inv_phase_rot_2wire_escape = {
 }
 q_command:register_q_command_block( "phase_rot_2wire_escape_success",
         "phase_rot_2wire_escape",
-        solution_statevector_phase_rot_2wire_escape, true,
+        solution_statevector_phase_rot_2wire_escape, nil,true,
         door_pos_phase_rot_2wire_escape, chest_pos_phase_rot_2wire_escape, chest_inv_phase_rot_2wire_escape)
 q_command:register_q_command_block( "phase_rot_2wire_escape_success",
         "phase_rot_2wire_escape",
-        solution_statevector_phase_rot_2wire_escape, false,
+        solution_statevector_phase_rot_2wire_escape, nil,false,
         door_pos_phase_rot_2wire_escape, chest_pos_phase_rot_2wire_escape, chest_inv_phase_rot_2wire_escape)
--- END Escape room puzzles ---------------------------------------------
+-- END Escape room puzzles Level I ---------------------------------------------
+
+
+-- Escape room puzzles Level II -------------------------------------------------
+q_command.texts.xor_escape = {}
+q_command.texts.xor_escape.en =
+[[
+TLDR: Most of the help that you'll need for these 'escape room' circuit
+puzzles will appear in the chat area (upper left corner of your window)
+by Professor Q. For all of these puzzles, get blocks from the chest and
+place them on the circuit. The door to the next room will open when the
+liquid levels and arrows in the blue blocks correspond to the quantum
+state displayed on the wall behind the circuit in Dirac notation. The
+Bloch sphere at the end of each wire estimates the state of its qubit,
+and right-clicking it performs a measurement of the circuit.
+----
+
+TOD: Fill in from CNOT puzzle
+
+If the Q block turned gold, congratulations on solving the puzzle!
+]]
+q_command.texts.xor_escape.es = q_command.texts.xor_escape.en
+q_command.texts.xor_escape.ja = q_command.texts.xor_escape.en
+q_command:register_help_button("xor_escape",
+        "Make quantum XOR gate", q_command.texts.xor_escape)
+local solution_unitary_xor_escape =
+{
+	{
+		{
+			r = 1,
+			i = 0
+		},
+		{
+			r = 0,
+			i = 0
+		},
+		{
+			r = 0,
+			i = 0
+		},
+		{
+			r = 0,
+			i = 0
+		}
+	},
+	{
+		{
+			r = 0,
+			i = 0
+		},
+		{
+			r = 0,
+			i = 0
+		},
+		{
+			r = 0,
+			i = 0
+		},
+		{
+			r = 1,
+			i = 0
+		}
+	},
+	{
+		{
+			r = 0,
+			i = 0
+		},
+		{
+			r = 0,
+			i = 0
+		},
+		{
+			r = 1,
+			i = 0
+		},
+		{
+			r = 0,
+			i = 0
+		}
+	},
+	{
+		{
+			r = 0,
+			i = 0
+		},
+		{
+			r = 1,
+			i = 0
+		},
+		{
+			r = 0,
+			i = 0
+		},
+		{
+			r = 0,
+			i = 0
+		}
+	}
+}
+local door_pos_xor_escape = {x = 220, y = 0, z = 67}
+local chest_pos_xor_escape = {x = 222, y = 0, z = 70}
+local chest_inv_xor_escape = {
+    inventory = {
+        main = {[1] = "", [2] = "", [3] = "", [4] = "",
+                [5] = "", [6] = "circuit_blocks:circuit_blocks_gate_qubit_1", [7] = "", [8] = "",
+                [9] = "", [10] = "", [11] = "", [12] = "",
+                [13] = "", [14] = "", [15] = "", [16] = "",
+                [17] = "", [18] = "", [19] = "", [20] = "",
+                [21] = "", [22] = "", [23] = "", [24] = "",
+                [25] = "circuit_blocks:circuit_blocks_x_gate", [26] = "", [27] = "", [28] = "",
+                [29] = "", [30] = "",
+                [31] = "circuit_blocks:control_tool", [32] = "circuit_blocks:circuit_blocks_measure_z"
+        }
+    }
+}
+q_command:register_q_command_block( "xor_escape_success", "xor_escape",
+        nil, solution_unitary_xor_escape,true,
+        door_pos_xor_escape, chest_pos_xor_escape, chest_inv_xor_escape)
+q_command:register_q_command_block( "xor_escape_success", "xor_escape",
+        nil, solution_unitary_xor_escape,false,
+        door_pos_xor_escape, chest_pos_xor_escape, chest_inv_xor_escape)
+
+
+--------
+q_command.texts.dj_bal_flip_ora_escape = {}
+q_command.texts.dj_bal_flip_ora_escape.en =
+[[
+TLDR:
+----
+
+TODO: Fill in
+
+If the Q block turned gold, congratulations on solving the puzzle!
+]]
+q_command.texts.dj_bal_flip_ora_escape.es = q_command.texts.dj_bal_flip_ora_escape.en
+q_command.texts.dj_bal_flip_ora_escape.ja = q_command.texts.dj_bal_flip_ora_escape.en
+q_command:register_help_button("dj_bal_flip_ora_escape",
+        "Make balanced oracle for Deutsch", q_command.texts.dj_bal_flip_ora_escape)
+local solution_unitary_dj_bal_flip_ora_escape =
+{
+	{
+		{
+			r = 0,
+			i = 0
+		},
+		{
+			r = 0,
+			i = 0
+		},
+		{
+			r = 1,
+			i = 0
+		},
+		{
+			r = 0,
+			i = 0
+		}
+	},
+	{
+		{
+			r = 0,
+			i = 0
+		},
+		{
+			r = 1,
+			i = 0
+		},
+		{
+			r = 0,
+			i = 0
+		},
+		{
+			r = 0,
+			i = 0
+		}
+	},
+	{
+		{
+			r = 1,
+			i = 0
+		},
+		{
+			r = 0,
+			i = 0
+		},
+		{
+			r = 0,
+			i = 0
+		},
+		{
+			r = 0,
+			i = 0
+		}
+	},
+	{
+		{
+			r = 0,
+			i = 0
+		},
+		{
+			r = 0,
+			i = 0
+		},
+		{
+			r = 0,
+			i = 0
+		},
+		{
+			r = 1,
+			i = 0
+		}
+	}
+}
+local door_pos_dj_bal_flip_ora_escape = {x = 213, y = 0, z = 60}
+local chest_pos_dj_bal_flip_ora_escape = {x = 222, y = 0, z = 64}
+local chest_inv_dj_bal_flip_ora_escape = {
+    inventory = {
+        main = {[1] = "", [2] = "", [3] = "", [4] = "",
+                [5] = "", [6] = "circuit_blocks:circuit_blocks_gate_qubit_1", [7] = "", [8] = "",
+                [9] = "", [10] = "", [11] = "", [12] = "",
+                [13] = "", [14] = "", [15] = "", [16] = "",
+                [17] = "", [18] = "", [19] = "", [20] = "",
+                [21] = "", [22] = "", [23] = "", [24] = "",
+                [25] = "circuit_blocks:circuit_blocks_x_gate", [26] = "", [27] = "", [28] = "",
+                [29] = "", [30] = "",
+                [31] = "circuit_blocks:control_tool", [32] = "circuit_blocks:circuit_blocks_measure_z"
+        }
+    }
+}
+q_command:register_q_command_block( "dj_bal_flip_ora_escape_success", "dj_bal_flip_ora_escape",
+        nil, solution_unitary_dj_bal_flip_ora_escape,true,
+        door_pos_dj_bal_flip_ora_escape, chest_pos_dj_bal_flip_ora_escape, chest_inv_dj_bal_flip_ora_escape)
+q_command:register_q_command_block( "dj_bal_flip_ora_escape_success", "dj_bal_flip_ora_escape",
+        nil, solution_unitary_dj_bal_flip_ora_escape,false,
+        door_pos_dj_bal_flip_ora_escape, chest_pos_dj_bal_flip_ora_escape, chest_inv_dj_bal_flip_ora_escape)
+
+
+--------
+q_command.texts.toffoli_escape = {}
+q_command.texts.toffoli_escape.en =
+[[
+TLDR:
+----
+
+TODO: Fill in
+
+If the Q block turned gold, congratulations on solving the puzzle!
+]]
+q_command.texts.toffoli_escape.es = q_command.texts.toffoli_escape.en
+q_command.texts.toffoli_escape.ja = q_command.texts.toffoli_escape.en
+q_command:register_help_button("toffoli_escape",
+        "Make classical AND gate", q_command.texts.toffoli_escape)
+local solution_unitary_toffoli_escape =
+{
+	{{r = 1, i = 0}, {r = 0, i = 0}, {r = 0, i = 0}, {r = 0, i = 0},
+     {r = 0, i = 0}, {r = 0, i = 0}, {r = 0, i = 0}, {r = 0, i = 0}},
+	{{r = 0, i = 0}, {r = 1, i = 0}, {r = 0, i = 0}, {r = 0, i = 0},
+     {r = 0, i = 0}, {r = 0, i = 0}, {r = 0, i = 0}, {r = 0, i = 0}},
+	{{r = 0, i = 0}, {r = 0, i = 0}, {r = 1, i = 0}, {r = 0, i = 0},
+     {r = 0, i = 0}, {r = 0, i = 0}, {r = 0, i = 0}, {r = 0, i = 0}},
+	{{r = 0, i = 0}, {r = 0, i = 0}, {r = 0, i = 0}, {r = 0, i = 0},
+     {r = 0, i = 0}, {r = 0, i = 0}, {r = 0, i = 0}, {r = 1, i = 0}},
+	{{r = 0, i = 0}, {r = 0, i = 0}, {r = 0, i = 0}, {r = 0, i = 0},
+     {r = 1, i = 0}, {r = 0, i = 0}, {r = 0, i = 0}, {r = 0, i = 0}},
+	{{r = 0, i = 0}, {r = 0, i = 0}, {r = 0, i = 0}, {r = 0, i = 0},
+     {r = 0, i = 0}, {r = 1, i = 0}, {r = 0, i = 0}, {r = 0, i = 0}},
+	{{r = 0, i = 0}, {r = 0, i = 0}, {r = 0, i = 0}, {r = 0, i = 0},
+     {r = 0, i = 0}, {r = 0, i = 0}, {r = 1, i = 0}, {r = 0, i = 0}},
+	{{r = 0, i = 0}, {r = 0, i = 0}, {r = 0, i = 0}, {r = 1, i = 0},
+     {r = 0, i = 0}, {r = 0, i = 0}, {r = 0, i = 0}, {r = 0, i = 0}}
+}
+local door_pos_toffoli_escape = {x = 206, y = 0, z = 67}
+local chest_pos_toffoli_escape = {x = 210, y = 0, z = 66}
+local chest_inv_toffoli_escape = {
+    inventory = {
+        main = {[1] = "", [2] = "", [3] = "", [4] = "",
+                [5] = "", [6] = "circuit_blocks:circuit_blocks_gate_qubit_1", [7] = "", [8] = "",
+                [9] = "", [10] = "", [11] = "", [12] = "",
+                [13] = "", [14] = "", [15] = "", [16] = "",
+                [17] = "", [18] = "", [19] = "", [20] = "",
+                [21] = "", [22] = "", [23] = "", [24] = "",
+                [25] = "circuit_blocks:circuit_blocks_x_gate", [26] = "", [27] = "", [28] = "",
+                [29] = "", [30] = "",
+                [31] = "circuit_blocks:control_tool", [32] = "circuit_blocks:circuit_blocks_measure_z"
+        }
+    }
+}
+q_command:register_q_command_block( "toffoli_escape_success", "toffoli_escape",
+        nil, solution_unitary_toffoli_escape,true,
+        door_pos_toffoli_escape, chest_pos_toffoli_escape, chest_inv_toffoli_escape)
+q_command:register_q_command_block( "toffoli_escape_success", "toffoli_escape",
+        nil, solution_unitary_toffoli_escape,false,
+        door_pos_toffoli_escape, chest_pos_toffoli_escape, chest_inv_toffoli_escape)
+
+
+--------
+q_command.texts.toffoli_nand_escape = {}
+q_command.texts.toffoli_nand_escape.en =
+[[
+TLDR:
+----
+
+TODO: Fill in
+
+If the Q block turned gold, congratulations on solving the puzzle!
+]]
+q_command.texts.toffoli_nand_escape.es = q_command.texts.toffoli_nand_escape.en
+q_command.texts.toffoli_nand_escape.ja = q_command.texts.toffoli_nand_escape.en
+q_command:register_help_button("toffoli_nand_escape",
+        "Make classical NAND gate", q_command.texts.toffoli_nand_escape)
+local solution_unitary_toffoli_nand_escape =
+{
+	{{r = 0, i = 0}, {r = 0, i = 0}, {r = 0, i = 0}, {r = 0, i = 0},
+     {r = 1, i = 0}, {r = 0, i = 0}, {r = 0, i = 0}, {r = 0, i = 0}},
+	{{r = 0, i = 0}, {r = 0, i = 0}, {r = 0, i = 0}, {r = 0, i = 0},
+     {r = 0, i = 0}, {r = 1, i = 0}, {r = 0, i = 0}, {r = 0, i = 0}},
+	{{r = 0, i = 0}, {r = 0, i = 0}, {r = 0, i = 0}, {r = 0, i = 0},
+     {r = 0, i = 0}, {r = 0, i = 0}, {r = 1, i = 0}, {r = 0, i = 0}},
+	{{r = 0, i = 0}, {r = 0, i = 0}, {r = 0, i = 0}, {r = 1, i = 0},
+     {r = 0, i = 0}, {r = 0, i = 0}, {r = 0, i = 0}, {r = 0, i = 0}},
+	{{r = 1, i = 0}, {r = 0, i = 0}, {r = 0, i = 0}, {r = 0, i = 0},
+     {r = 0, i = 0}, {r = 0, i = 0}, {r = 0, i = 0}, {r = 0, i = 0}},
+	{{r = 0, i = 0}, {r = 1, i = 0}, {r = 0, i = 0}, {r = 0, i = 0},
+     {r = 0, i = 0}, {r = 0, i = 0}, {r = 0, i = 0}, {r = 0, i = 0}},
+	{{r = 0, i = 0}, {r = 0, i = 0}, {r = 1, i = 0}, {r = 0, i = 0},
+     {r = 0, i = 0}, {r = 0, i = 0}, {r = 0, i = 0}, {r = 0, i = 0}},
+	{{r = 0, i = 0}, {r = 0, i = 0}, {r = 0, i = 0}, {r = 0, i = 0},
+     {r = 0, i = 0}, {r = 0, i = 0}, {r = 0, i = 0}, {r = 1, i = 0}}
+}
+local door_pos_toffoli_nand_escape = {x = 210, y = 0, z = 77}
+local chest_pos_toffoli_nand_escape = {x = 206, y = 0, z = 76}
+local chest_inv_toffoli_nand_escape = {
+    inventory = {
+        main = {[1] = "", [2] = "", [3] = "", [4] = "",
+                [5] = "", [6] = "circuit_blocks:circuit_blocks_gate_qubit_1", [7] = "", [8] = "",
+                [9] = "", [10] = "", [11] = "", [12] = "",
+                [13] = "", [14] = "", [15] = "", [16] = "",
+                [17] = "", [18] = "", [19] = "", [20] = "",
+                [21] = "", [22] = "", [23] = "", [24] = "",
+                [25] = "circuit_blocks:circuit_blocks_x_gate", [26] = "", [27] = "", [28] = "",
+                [29] = "", [30] = "",
+                [31] = "circuit_blocks:control_tool", [32] = "circuit_blocks:circuit_blocks_measure_z"
+        }
+    }
+}
+q_command:register_q_command_block( "toffoli_nand_escape_success", "toffoli_nand_escape",
+        nil, solution_unitary_toffoli_nand_escape,true,
+        door_pos_toffoli_nand_escape, chest_pos_toffoli_nand_escape, chest_inv_toffoli_nand_escape)
+q_command:register_q_command_block( "toffoli_nand_escape_success", "toffoli_nand_escape",
+        nil, solution_unitary_toffoli_nand_escape,false,
+        door_pos_toffoli_nand_escape, chest_pos_toffoli_nand_escape, chest_inv_toffoli_nand_escape)
+
+
+--------
+q_command.texts.or_escape = {}
+q_command.texts.or_escape.en =
+[[
+TLDR:
+----
+
+TODO: Fill in
+
+If the Q block turned gold, congratulations on solving the puzzle!
+]]
+q_command.texts.or_escape.es = q_command.texts.or_escape.en
+q_command.texts.or_escape.ja = q_command.texts.or_escape.en
+q_command:register_help_button("or_escape",
+        "Make classical OR gate", q_command.texts.or_escape)
+local solution_unitary_or_escape =
+{
+	{{r = 1, i = 0}, {r = 0, i = 0}, {r = 0, i = 0}, {r = 0, i = 0},
+     {r = 0, i = 0}, {r = 0, i = 0}, {r = 0, i = 0}, {r = 0, i = 0}},
+	{{r = 0, i = 0}, {r = 0, i = 0}, {r = 0, i = 0}, {r = 0, i = 0},
+     {r = 0, i = 0}, {r = 1, i = 0}, {r = 0, i = 0}, {r = 0, i = 0}},
+	{{r = 0, i = 0}, {r = 0, i = 0}, {r = 0, i = 0}, {r = 0, i = 0},
+     {r = 0, i = 0}, {r = 0, i = 0}, {r = 1, i = 0}, {r = 0, i = 0}},
+	{{r = 0, i = 0}, {r = 0, i = 0}, {r = 0, i = 0}, {r = 0, i = 0},
+     {r = 0, i = 0}, {r = 0, i = 0}, {r = 0, i = 0}, {r = 1, i = 0}},
+	{{r = 0, i = 0}, {r = 0, i = 0}, {r = 0, i = 0}, {r = 0, i = 0},
+     {r = 1, i = 0}, {r = 0, i = 0}, {r = 0, i = 0}, {r = 0, i = 0}},
+	{{r = 0, i = 0}, {r = 1, i = 0}, {r = 0, i = 0}, {r = 0, i = 0},
+     {r = 0, i = 0}, {r = 0, i = 0}, {r = 0, i = 0}, {r = 0, i = 0}},
+	{{r = 0, i = 0}, {r = 0, i = 0}, {r = 1, i = 0}, {r = 0, i = 0},
+     {r = 0, i = 0}, {r = 0, i = 0}, {r = 0, i = 0}, {r = 0, i = 0}},
+	{{r = 0, i = 0}, {r = 0, i = 0}, {r = 0, i = 0}, {r = 1, i = 0},
+     {r = 0, i = 0}, {r = 0, i = 0}, {r = 0, i = 0}, {r = 0, i = 0}}
+}
+local door_pos_or_escape = {x = 220, y = 0, z = 87}
+local chest_pos_or_escape = {x = 214, y = 0, z = 84}
+local chest_inv_or_escape = {
+    inventory = {
+        main = {[1] = "", [2] = "", [3] = "", [4] = "",
+                [5] = "", [6] = "circuit_blocks:circuit_blocks_gate_qubit_1", [7] = "", [8] = "",
+                [9] = "", [10] = "", [11] = "", [12] = "",
+                [13] = "", [14] = "", [15] = "", [16] = "",
+                [17] = "", [18] = "", [19] = "", [20] = "",
+                [21] = "", [22] = "", [23] = "", [24] = "",
+                [25] = "circuit_blocks:circuit_blocks_x_gate", [26] = "", [27] = "", [28] = "",
+                [29] = "", [30] = "",
+                [31] = "circuit_blocks:control_tool", [32] = "circuit_blocks:circuit_blocks_measure_z"
+        }
+    }
+}
+q_command:register_q_command_block( "or_escape_success", "or_escape",
+        nil, solution_unitary_or_escape,true,
+        door_pos_or_escape, chest_pos_or_escape, chest_inv_or_escape)
+q_command:register_q_command_block( "or_escape_success", "or_escape",
+        nil, solution_unitary_or_escape,false,
+        door_pos_or_escape, chest_pos_or_escape, chest_inv_or_escape)
+
+
+--------
+q_command.texts.nor_escape = {}
+q_command.texts.nor_escape.en =
+[[
+TLDR:
+----
+
+TODO: Fill in
+
+If the Q block turned gold, congratulations on solving the puzzle!
+]]
+q_command.texts.nor_escape.es = q_command.texts.nor_escape.en
+q_command.texts.nor_escape.ja = q_command.texts.nor_escape.en
+q_command:register_help_button("nor_escape",
+        "Make classical NOR gate", q_command.texts.nor_escape)
+local solution_unitary_nor_escape =
+{
+	{{r = 0, i = 0}, {r = 0, i = 0}, {r = 0, i = 0}, {r = 0, i = 0},
+     {r = 1, i = 0}, {r = 0, i = 0}, {r = 0, i = 0}, {r = 0, i = 0}},
+	{{r = 0, i = 0}, {r = 1, i = 0}, {r = 0, i = 0}, {r = 0, i = 0},
+     {r = 0, i = 0}, {r = 0, i = 0}, {r = 0, i = 0}, {r = 0, i = 0}},
+	{{r = 0, i = 0}, {r = 0, i = 0}, {r = 1, i = 0}, {r = 0, i = 0},
+     {r = 0, i = 0}, {r = 0, i = 0}, {r = 0, i = 0}, {r = 0, i = 0}},
+	{{r = 0, i = 0}, {r = 0, i = 0}, {r = 0, i = 0}, {r = 1, i = 0},
+     {r = 0, i = 0}, {r = 0, i = 0}, {r = 0, i = 0}, {r = 0, i = 0}},
+	{{r = 1, i = 0}, {r = 0, i = 0}, {r = 0, i = 0}, {r = 0, i = 0},
+     {r = 0, i = 0}, {r = 0, i = 0}, {r = 0, i = 0}, {r = 0, i = 0}},
+	{{r = 0, i = 0}, {r = 0, i = 0}, {r = 0, i = 0}, {r = 0, i = 0},
+     {r = 0, i = 0}, {r = 1, i = 0}, {r = 0, i = 0}, {r = 0, i = 0}},
+	{{r = 0, i = 0}, {r = 0, i = 0}, {r = 0, i = 0}, {r = 0, i = 0},
+     {r = 0, i = 0}, {r = 0, i = 0}, {r = 1, i = 0}, {r = 0, i = 0}},
+	{{r = 0, i = 0}, {r = 0, i = 0}, {r = 0, i = 0}, {r = 0, i = 0},
+     {r = 0, i = 0}, {r = 0, i = 0}, {r = 0, i = 0}, {r = 1, i = 0}}
+}
+local door_pos_nor_escape = {x = 220, y = 0, z = 87}
+local chest_pos_nor_escape = {x = 214, y = 0, z = 84}
+local chest_inv_nor_escape = {
+    inventory = {
+        main = {[1] = "", [2] = "", [3] = "", [4] = "",
+                [5] = "", [6] = "circuit_blocks:circuit_blocks_gate_qubit_1", [7] = "", [8] = "",
+                [9] = "", [10] = "", [11] = "", [12] = "",
+                [13] = "", [14] = "", [15] = "", [16] = "",
+                [17] = "", [18] = "", [19] = "", [20] = "",
+                [21] = "", [22] = "", [23] = "", [24] = "",
+                [25] = "circuit_blocks:circuit_blocks_x_gate", [26] = "", [27] = "", [28] = "",
+                [29] = "", [30] = "",
+                [31] = "circuit_blocks:control_tool", [32] = "circuit_blocks:circuit_blocks_measure_z"
+        }
+    }
+}
+q_command:register_q_command_block( "nor_escape_success", "nor_escape",
+        nil, solution_unitary_nor_escape,true,
+        door_pos_nor_escape, chest_pos_nor_escape, chest_inv_nor_escape)
+q_command:register_q_command_block( "nor_escape_success", "nor_escape",
+        nil, solution_unitary_nor_escape,false,
+        door_pos_nor_escape, chest_pos_nor_escape, chest_inv_nor_escape)
+
+
+--------
+q_command.texts.toffoli_mixed_escape = {}
+q_command.texts.toffoli_mixed_escape.en =
+[[
+TLDR:
+----
+
+TODO: Fill in
+
+If the Q block turned gold, congratulations on solving the puzzle!
+]]
+q_command.texts.toffoli_mixed_escape.es = q_command.texts.toffoli_mixed_escape.en
+q_command.texts.toffoli_mixed_escape.ja = q_command.texts.toffoli_mixed_escape.en
+q_command:register_help_button("toffoli_mixed_escape",
+        "Make mixed Toffoli gate", q_command.texts.toffoli_mixed_escape)
+local solution_unitary_toffoli_mixed_escape =
+{
+	{{r = 1, i = 0}, {r = 0, i = 0}, {r = 0, i = 0}, {r = 0, i = 0},
+     {r = 0, i = 0}, {r = 0, i = 0}, {r = 0, i = 0}, {r = 0, i = 0}},
+	{{r = 0, i = 0}, {r = 1, i = 0}, {r = 0, i = 0}, {r = 0, i = 0},
+     {r = 0, i = 0}, {r = 0, i = 0}, {r = 0, i = 0}, {r = 0, i = 0}},
+	{{r = 0, i = 0}, {r = 0, i = 0}, {r = 0, i = 0}, {r = 0, i = 0},
+     {r = 0, i = 0}, {r = 0, i = 0}, {r = 1, i = 0}, {r = 0, i = 0}},
+	{{r = 0, i = 0}, {r = 0, i = 0}, {r = 0, i = 0}, {r = 1, i = 0},
+     {r = 0, i = 0}, {r = 0, i = 0}, {r = 0, i = 0}, {r = 0, i = 0}},
+	{{r = 0, i = 0}, {r = 0, i = 0}, {r = 0, i = 0}, {r = 0, i = 0},
+     {r = 1, i = 0}, {r = 0, i = 0}, {r = 0, i = 0}, {r = 0, i = 0}},
+	{{r = 0, i = 0}, {r = 0, i = 0}, {r = 0, i = 0}, {r = 0, i = 0},
+     {r = 0, i = 0}, {r = 1, i = 0}, {r = 0, i = 0}, {r = 0, i = 0}},
+	{{r = 0, i = 0}, {r = 0, i = 0}, {r = 1, i = 0}, {r = 0, i = 0},
+     {r = 0, i = 0}, {r = 0, i = 0}, {r = 0, i = 0}, {r = 0, i = 0}},
+	{{r = 0, i = 0}, {r = 0, i = 0}, {r = 0, i = 0}, {r = 0, i = 0},
+     {r = 0, i = 0}, {r = 0, i = 0}, {r = 0, i = 0}, {r = 1, i = 0}}
+}
+local door_pos_toffoli_mixed_escape = {x = 213, y = 0, z = 94}
+local chest_pos_toffoli_mixed_escape = {x = 214, y = 0, z = 90}
+local chest_inv_toffoli_mixed_escape = {
+    inventory = {
+        main = {[1] = "", [2] = "", [3] = "", [4] = "",
+                [5] = "", [6] = "circuit_blocks:circuit_blocks_gate_qubit_1", [7] = "", [8] = "",
+                [9] = "", [10] = "", [11] = "", [12] = "",
+                [13] = "", [14] = "", [15] = "", [16] = "",
+                [17] = "", [18] = "", [19] = "", [20] = "",
+                [21] = "", [22] = "", [23] = "", [24] = "",
+                [25] = "circuit_blocks:circuit_blocks_x_gate", [26] = "", [27] = "", [28] = "",
+                [29] = "", [30] = "",
+                [31] = "circuit_blocks:control_tool", [32] = "circuit_blocks:circuit_blocks_measure_z"
+        }
+    }
+}
+q_command:register_q_command_block( "toffoli_mixed_escape_success", "toffoli_mixed_escape",
+        nil, solution_unitary_toffoli_mixed_escape,true,
+        door_pos_toffoli_mixed_escape, chest_pos_toffoli_mixed_escape, chest_inv_toffoli_mixed_escape)
+q_command:register_q_command_block( "toffoli_mixed_escape_success", "toffoli_mixed_escape",
+        nil, solution_unitary_toffoli_mixed_escape,false,
+        door_pos_toffoli_mixed_escape, chest_pos_toffoli_mixed_escape, chest_inv_toffoli_mixed_escape)
+
+
+--------
+q_command.texts.swap_escape = {}
+q_command.texts.swap_escape.en =
+[[
+TLDR:
+----
+
+TODO: Fill in
+
+If the Q block turned gold, congratulations on solving the puzzle!
+]]
+q_command.texts.swap_escape.es = q_command.texts.swap_escape.en
+q_command.texts.swap_escape.ja = q_command.texts.swap_escape.en
+q_command:register_help_button("swap_escape",
+        "Make Swap gate", q_command.texts.swap_escape)
+local solution_unitary_swap_escape =
+{
+	{{r = 1, i = 0}, {r = 0, i = 0}, {r = 0, i = 0}, {r = 0, i = 0},
+     {r = 0, i = 0}, {r = 0, i = 0}, {r = 0, i = 0}, {r = 0, i = 0}},
+	{{r = 0, i = 0}, {r = 1, i = 0}, {r = 0, i = 0}, {r = 0, i = 0},
+     {r = 0, i = 0}, {r = 0, i = 0}, {r = 0, i = 0}, {r = 0, i = 0}},
+	{{r = 0, i = 0}, {r = 0, i = 0}, {r = 0, i = 0}, {r = 0, i = 0},
+     {r = 1, i = 0}, {r = 0, i = 0}, {r = 0, i = 0}, {r = 0, i = 0}},
+	{{r = 0, i = 0}, {r = 0, i = 0}, {r = 0, i = 0}, {r = 0, i = 0},
+     {r = 0, i = 0}, {r = 1, i = 0}, {r = 0, i = 0}, {r = 0, i = 0}},
+	{{r = 0, i = 0}, {r = 0, i = 0}, {r = 1, i = 0}, {r = 0, i = 0},
+     {r = 0, i = 0}, {r = 0, i = 0}, {r = 0, i = 0}, {r = 0, i = 0}},
+	{{r = 0, i = 0}, {r = 0, i = 0}, {r = 0, i = 0}, {r = 1, i = 0},
+     {r = 0, i = 0}, {r = 0, i = 0}, {r = 0, i = 0}, {r = 0, i = 0}},
+	{{r = 0, i = 0}, {r = 0, i = 0}, {r = 0, i = 0}, {r = 0, i = 0},
+     {r = 0, i = 0}, {r = 0, i = 0}, {r = 1, i = 0}, {r = 0, i = 0}},
+	{{r = 0, i = 0}, {r = 0, i = 0}, {r = 0, i = 0}, {r = 0, i = 0},
+     {r = 0, i = 0}, {r = 0, i = 0}, {r = 0, i = 0}, {r = 1, i = 0}}
+}
+local door_pos_swap_escape = {x = 203, y = 0, z = 90}
+local chest_pos_swap_escape = {x = 210, y = 0, z = 96}
+local chest_inv_swap_escape = {
+    inventory = {
+        main = {[1] = "", [2] = "", [3] = "", [4] = "",
+                [5] = "", [6] = "circuit_blocks:circuit_blocks_gate_qubit_1", [7] = "", [8] = "",
+                [9] = "", [10] = "", [11] = "", [12] = "",
+                [13] = "", [14] = "", [15] = "circuit_blocks:swap_tool", [16] = "",
+                [17] = "", [18] = "", [19] = "", [20] = "",
+                [21] = "", [22] = "circuit_blocks:circuit_blocks_swap", [23] = "", [24] = "",
+                [25] = "circuit_blocks:circuit_blocks_x_gate", [26] = "", [27] = "", [28] = "",
+                [29] = "", [30] = "",
+                [31] = "", [32] = "circuit_blocks:circuit_blocks_measure_z"
+        }
+    }
+}
+q_command:register_q_command_block( "swap_escape_success", "swap_escape",
+        nil, solution_unitary_swap_escape,true,
+        door_pos_swap_escape, chest_pos_swap_escape, chest_inv_swap_escape)
+q_command:register_q_command_block( "swap_escape_success", "swap_escape",
+        nil, solution_unitary_swap_escape,false,
+        door_pos_swap_escape, chest_pos_swap_escape, chest_inv_swap_escape)
+
+
+--------
+q_command.texts.ctrl_swap_escape = {}
+q_command.texts.ctrl_swap_escape.en =
+[[
+TLDR:
+----
+
+TODO: Fill in
+
+If the Q block turned gold, congratulations on solving the puzzle!
+]]
+q_command.texts.ctrl_swap_escape.es = q_command.texts.ctrl_swap_escape.en
+q_command.texts.ctrl_swap_escape.ja = q_command.texts.ctrl_swap_escape.en
+q_command:register_help_button("ctrl_swap_escape",
+        "Make controlled Swap gate", q_command.texts.ctrl_swap_escape)
+local solution_unitary_ctrl_swap_escape =
+{
+	{{r = 1, i = 0}, {r = 0, i = 0}, {r = 0, i = 0}, {r = 0, i = 0},
+     {r = 0, i = 0}, {r = 0, i = 0}, {r = 0, i = 0}, {r = 0, i = 0}},
+	{{r = 0, i = 0}, {r = 1, i = 0}, {r = 0, i = 0}, {r = 0, i = 0},
+     {r = 0, i = 0}, {r = 0, i = 0}, {r = 0, i = 0}, {r = 0, i = 0}},
+	{{r = 0, i = 0}, {r = 0, i = 0}, {r = 1, i = 0}, {r = 0, i = 0},
+     {r = 0, i = 0}, {r = 0, i = 0}, {r = 0, i = 0}, {r = 0, i = 0}},
+	{{r = 0, i = 0}, {r = 0, i = 0}, {r = 0, i = 0}, {r = 1, i = 0},
+     {r = 0, i = 0}, {r = 0, i = 0}, {r = 0, i = 0}, {r = 0, i = 0}},
+	{{r = 0, i = 0}, {r = 0, i = 0}, {r = 0, i = 0}, {r = 0, i = 0},
+     {r = 1, i = 0}, {r = 0, i = 0}, {r = 0, i = 0}, {r = 0, i = 0}},
+	{{r = 0, i = 0}, {r = 0, i = 0}, {r = 0, i = 0}, {r = 0, i = 0},
+     {r = 0, i = 0}, {r = 0, i = 0}, {r = 1, i = 0}, {r = 0, i = 0}},
+	{{r = 0, i = 0}, {r = 0, i = 0}, {r = 0, i = 0}, {r = 0, i = 0},
+     {r = 0, i = 0}, {r = 1, i = 0}, {r = 0, i = 0}, {r = 0, i = 0}},
+	{{r = 0, i = 0}, {r = 0, i = 0}, {r = 0, i = 0}, {r = 0, i = 0},
+     {r = 0, i = 0}, {r = 0, i = 0}, {r = 0, i = 0}, {r = 1, i = 0}}
+}
+local door_pos_ctrl_swap_escape = {x = 193, y = 0, z = 94}
+local chest_pos_ctrl_swap_escape = {x = 200, y = 0, z = 88}
+local chest_inv_ctrl_swap_escape = {
+    inventory = {
+        main = {[1] = "", [2] = "", [3] = "", [4] = "",
+                [5] = "", [6] = "circuit_blocks:circuit_blocks_gate_qubit_1", [7] = "", [8] = "",
+                [9] = "", [10] = "", [11] = "", [12] = "",
+                [13] = "", [14] = "", [15] = "circuit_blocks:swap_tool", [16] = "",
+                [17] = "", [18] = "", [19] = "", [20] = "",
+                [21] = "", [22] = "circuit_blocks:circuit_blocks_swap", [23] = "", [24] = "",
+                [25] = "circuit_blocks:circuit_blocks_x_gate", [26] = "", [27] = "", [28] = "",
+                [29] = "", [30] = "",
+                [31] = "circuit_blocks:control_tool", [32] = "circuit_blocks:circuit_blocks_measure_z"
+        }
+    }
+}
+q_command:register_q_command_block( "ctrl_swap_escape_success", "ctrl_swap_escape",
+        nil, solution_unitary_ctrl_swap_escape,true,
+        door_pos_ctrl_swap_escape, chest_pos_ctrl_swap_escape, chest_inv_ctrl_swap_escape)
+q_command:register_q_command_block( "ctrl_swap_escape_success", "ctrl_swap_escape",
+        nil, solution_unitary_ctrl_swap_escape,false,
+        door_pos_ctrl_swap_escape, chest_pos_ctrl_swap_escape, chest_inv_ctrl_swap_escape)
+
+
+--------
+q_command.texts.and_3_operands_x_escape = {}
+q_command.texts.and_3_operands_x_escape.en =
+[[
+TLDR:
+----
+
+TODO: Fill in
+
+If the Q block turned gold, congratulations on solving the puzzle!
+]]
+q_command.texts.and_3_operands_x_escape.es = q_command.texts.and_3_operands_x_escape.en
+q_command.texts.and_3_operands_x_escape.ja = q_command.texts.and_3_operands_x_escape.en
+q_command:register_help_button("and_3_operands_x_escape",
+        "Make oracle with three operands", q_command.texts.and_3_operands_x_escape)
+local solution_unitary_and_3_operands_x_escape =
+{{{r=1,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0}},{{r=0,i=0},{r=1,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0}},{{r=0,i=0},{r=0,i=0},{r=1,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0}},{{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=1,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0}},{{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=1,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0}},{{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=1,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0}},{{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=1,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0}},{{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=1,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0}},{{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=1,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0}},{{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=1,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0}},{{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=1,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0}},{{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=1,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0}},{{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=1,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0}},{{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=1,i=0},{r=0,i=0},{r=0,i=0}},{{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=1,i=0},{r=0,i=0}},{{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=1,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0}},{{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=1,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0}},{{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=1,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0}},{{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=1,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0}},{{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=1,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0}},{{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=1,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0}},{{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=1,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0}},{{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=1,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0}},{{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=1,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0}},{{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=1,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0}},{{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=1,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0}},{{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=1,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0}},{{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=1,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0}},{{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=1,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0}},{{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=1,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0}},{{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=1,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0}},{{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=1,i=0}}}
+local door_pos_and_3_operands_x_escape = {x = 190, y = 0, z = 87}
+local chest_pos_and_3_operands_x_escape = {x = 192, y = 0, z = 90}
+local chest_inv_and_3_operands_x_escape = {
+    inventory = {
+        main = {[1] = "", [2] = "", [3] = "", [4] = "",
+                [5] = "", [6] = "circuit_blocks:circuit_blocks_gate_qubit_1", [7] = "", [8] = "",
+                [9] = "", [10] = "", [11] = "", [12] = "",
+                [13] = "", [14] = "", [15] = "", [16] = "",
+                [17] = "", [18] = "", [19] = "", [20] = "",
+                [21] = "", [22] = "", [23] = "", [24] = "",
+                [25] = "circuit_blocks:circuit_blocks_x_gate", [26] = "", [27] = "", [28] = "",
+                [29] = "", [30] = "",
+                [31] = "circuit_blocks:control_tool", [32] = "circuit_blocks:circuit_blocks_measure_z"
+        }
+    }
+}
+q_command:register_q_command_block( "and_3_operands_x_escape_success", "and_3_operands_x_escape",
+        nil, solution_unitary_and_3_operands_x_escape,true,
+        door_pos_and_3_operands_x_escape, chest_pos_and_3_operands_x_escape, chest_inv_and_3_operands_x_escape)
+q_command:register_q_command_block( "and_3_operands_x_escape_success", "and_3_operands_x_escape",
+        nil, solution_unitary_and_3_operands_x_escape,false,
+        door_pos_and_3_operands_x_escape, chest_pos_and_3_operands_x_escape, chest_inv_and_3_operands_x_escape)
+
+
+--------
+q_command.texts.and_not_3_operands_x_escape = {}
+q_command.texts.and_not_3_operands_x_escape.en =
+[[
+TLDR:
+----
+
+TODO: Fill in
+
+If the Q block turned gold, congratulations on solving the puzzle!
+]]
+q_command.texts.and_not_3_operands_x_escape.es = q_command.texts.and_not_3_operands_x_escape.en
+q_command.texts.and_not_3_operands_x_escape.ja = q_command.texts.and_not_3_operands_x_escape.en
+q_command:register_help_button("and_not_3_operands_x_escape",
+        "Make oracle with three operands", q_command.texts.and_not_3_operands_x_escape)
+local solution_unitary_and_not_3_operands_x_escape =
+{{{r=1,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0}},{{r=0,i=0},{r=1,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0}},{{r=0,i=0},{r=0,i=0},{r=1,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0}},{{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=1,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0}},{{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=1,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0}},{{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=1,i=-0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0}},{{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=1,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0}},{{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=1,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0}},{{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=1,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0}},{{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=1,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0}},{{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=1,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0}},{{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=1,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0}},{{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=1,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0}},{{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=1,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0}},{{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=1,i=0},{r=0,i=0}},{{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=1,i=0}},{{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=1,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0}},{{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=1,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0}},{{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=1,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0}},{{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=1,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0}},{{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=1,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0}},{{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=1,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0}},{{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=1,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0}},{{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=1,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0}},{{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=1,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0}},{{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=1,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0}},{{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=1,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0}},{{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=1,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0}},{{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=1,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0}},{{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=1,i=0},{r=0,i=0},{r=0,i=0}},{{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=1,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0}},{{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=1,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0}}}
+local door_pos_and_not_3_operands_x_escape = {x = 193, y = 0, z = 80}
+local chest_pos_and_not_3_operands_x_escape = {x = 192, y = 0, z = 84}
+local chest_inv_and_not_3_operands_x_escape = {
+    inventory = {
+        main = {[1] = "", [2] = "", [3] = "", [4] = "",
+                [5] = "", [6] = "circuit_blocks:circuit_blocks_gate_qubit_1", [7] = "", [8] = "",
+                [9] = "", [10] = "", [11] = "", [12] = "",
+                [13] = "", [14] = "", [15] = "", [16] = "",
+                [17] = "", [18] = "", [19] = "", [20] = "",
+                [21] = "", [22] = "", [23] = "", [24] = "",
+                [25] = "circuit_blocks:circuit_blocks_x_gate", [26] = "", [27] = "", [28] = "",
+                [29] = "", [30] = "",
+                [31] = "circuit_blocks:control_tool", [32] = "circuit_blocks:circuit_blocks_measure_z"
+        }
+    }
+}
+q_command:register_q_command_block( "and_not_3_operands_x_escape_success", "and_not_3_operands_x_escape",
+        nil, solution_unitary_and_not_3_operands_x_escape,true,
+        door_pos_and_not_3_operands_x_escape, chest_pos_and_not_3_operands_x_escape, chest_inv_and_not_3_operands_x_escape)
+q_command:register_q_command_block( "and_not_3_operands_x_escape_success", "and_not_3_operands_x_escape",
+        nil, solution_unitary_and_not_3_operands_x_escape,false,
+        door_pos_and_not_3_operands_x_escape, chest_pos_and_not_3_operands_x_escape, chest_inv_and_not_3_operands_x_escape)
+
+
+--------
+q_command.texts.and_2_operands_z_escape = {}
+q_command.texts.and_2_operands_z_escape.en =
+[[
+TLDR:
+----
+
+TODO: Fill in
+
+If the Q block turned gold, congratulations on solving the puzzle!
+]]
+q_command.texts.and_2_operands_z_escape.es = q_command.texts.and_2_operands_z_escape.en
+q_command.texts.and_2_operands_z_escape.ja = q_command.texts.and_2_operands_z_escape.en
+q_command:register_help_button("and_2_operands_z_escape",
+        "Make phase oracle with two operands", q_command.texts.and_2_operands_z_escape)
+local solution_unitary_and_2_operands_z_escape =
+{{{r=1,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0}},{{r=0,i=0},{r=1,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0}},{{r=0,i=0},{r=0,i=0},{r=1,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0}},{{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=1,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0}},{{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=1,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0}},{{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=1,i=0},{r=0,i=0},{r=0,i=0}},{{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=1,i=0},{r=0,i=0}},{{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=1,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0}},{{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=1,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0}},{{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=1,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0}},{{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=1,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0}},{{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=1,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0}},{{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=1,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0}},{{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=1,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0}},{{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=1,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0}},{{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=0,i=0},{r=1,i=0}}}
+local door_pos_and_2_operands_z_escape = {x = 196, y = 0, z = 77}
+local chest_pos_and_2_operands_z_escape = {x = 200, y = 0, z = 78}
+local chest_inv_and_2_operands_z_escape = {
+    inventory = {
+        main = {[1] = "", [2] = "", [3] = "", [4] = "",
+                [5] = "", [6] = "circuit_blocks:circuit_blocks_gate_qubit_1", [7] = "", [8] = "",
+                [9] = "", [10] = "", [11] = "", [12] = "",
+                [13] = "", [14] = "", [15] = "", [16] = "",
+                [17] = "", [18] = "", [19] = "", [20] = "",
+                [21] = "", [22] = "", [23] = "", [24] = "",
+                [25] = "circuit_blocks:circuit_blocks_x_gate", [26] = "", [27] = "circuit_blocks:circuit_blocks_z_gate", [28] = "",
+                [29] = "", [30] = "",
+                [31] = "circuit_blocks:control_tool", [32] = "circuit_blocks:circuit_blocks_measure_z"
+        }
+    }
+}
+q_command:register_q_command_block( "and_2_operands_z_escape_success", "and_2_operands_z_escape",
+        nil, solution_unitary_and_2_operands_z_escape,true,
+        door_pos_and_2_operands_z_escape, chest_pos_and_2_operands_z_escape, chest_inv_and_2_operands_z_escape)
+q_command:register_q_command_block( "and_2_operands_z_escape_success", "and_2_operands_z_escape",
+        nil, solution_unitary_and_2_operands_z_escape,false,
+        door_pos_and_2_operands_z_escape, chest_pos_and_2_operands_z_escape, chest_inv_and_2_operands_z_escape)
+
+
+-- END Escape room puzzles Level II ---------------------------------------------
+
 
 
 
@@ -4896,6 +5749,35 @@ q_command:register_wall_block("q_command_math_sum")
 q_command:register_wall_block("q_command_math_e_i_pi_2")
 q_command:register_wall_block("q_command_math_e_i_pi_4")
 q_command:register_wall_block("q_command_math_e_i_3pi_2")
+
+q_command:register_wall_block("q_command_char_lower_a")
+q_command:register_wall_block("q_command_chars_paren_lower_a")
+q_command:register_wall_block("q_command_char_lower_b")
+q_command:register_wall_block("q_command_chars_lower_b_paren")
+q_command:register_wall_block("q_command_char_lower_c")
+q_command:register_wall_block("q_command_char_lower_d")
+q_command:register_wall_block("q_command_char_lower_e")
+q_command:register_wall_block("q_command_char_lower_f")
+q_command:register_wall_block("q_command_chars_and_1")
+q_command:register_wall_block("q_command_chars_and_2")
+q_command:register_wall_block("q_command_chars_or")
+q_command:register_wall_block("q_command_chars_nand_1")
+q_command:register_wall_block("q_command_chars_nand_2")
+q_command:register_wall_block("q_command_chars_not_1")
+q_command:register_wall_block("q_command_chars_not_2")
+q_command:register_wall_block("q_command_chars_nor_1")
+q_command:register_wall_block("q_command_chars_nor_2")
+q_command:register_wall_block("q_command_chars_xor_1")
+q_command:register_wall_block("q_command_chars_xor_2")
+q_command:register_wall_block("q_command_chars_if_c_underlined")
+q_command:register_wall_block("q_command_chars_equal_underlined")
+q_command:register_wall_block("q_command_chars_not_equal_underlined")
+q_command:register_wall_block("q_command_chars_one_state_underlined")
+
+
+q_command:register_wall_block("q_command_horiz_line_mid")
+q_command:register_wall_block("q_command_lines_swap_1")
+q_command:register_wall_block("q_command_lines_swap_2")
 
 -- TODO: Define function to create this basis state blocks
 q_command:register_wall_block("q_command_state_1qb_0")
