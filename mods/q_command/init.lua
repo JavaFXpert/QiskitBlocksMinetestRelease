@@ -155,7 +155,7 @@ q_command.regions.esc_rooms_level_7.id = ESC_ROOMS_LEVEL_7_REGION_ID
 q_command.regions.esc_rooms_level_7.num_areas = NUM_AREAS_IN_EACH_ESC_ROOM
 q_command.regions.esc_rooms_level_7.cur_area = 1  -- One-indexed
 q_command.regions.esc_rooms_level_7.hub_portal = {}
-q_command.regions.esc_rooms_level_7.hub_portal.center_pos = {x = 223, y = 0, z = 110}
+q_command.regions.esc_rooms_level_7.hub_portal.center_pos = {x = 224, y = 0, z = 110}
 q_command.regions.esc_rooms_level_7.hub_portal.return_pos = {x = 226, y = 0, z = 110}
 q_command.regions.esc_rooms_level_7.hub_portal.return_look_rad = RETURN_LOOK_RAD
 
@@ -252,7 +252,7 @@ dofile(minetest.get_modpath("q_command").."/q_esc_rooms_level_3.lua");
 dofile(minetest.get_modpath("q_command").."/q_esc_rooms_level_4.lua");
 dofile(minetest.get_modpath("q_command").."/q_esc_rooms_level_5.lua");
 dofile(minetest.get_modpath("q_command").."/q_esc_rooms_level_6.lua");
---dofile(minetest.get_modpath("q_command").."/q_esc_rooms_level_7.lua");
+dofile(minetest.get_modpath("q_command").."/q_esc_rooms_level_7.lua");
 --dofile(minetest.get_modpath("q_command").."/q_esc_rooms_level_8.lua");
 --dofile(minetest.get_modpath("q_command").."/q_esc_rooms_level_9.lua");
 --dofile(minetest.get_modpath("q_command").."/q_esc_rooms_level_10.lua");
@@ -2546,9 +2546,11 @@ minetest.register_globalstep(function(dtime)
                 if object:is_player() then
                     -- Teleport to area
                     minetest.chat_send_player(object:get_player_name(), "Teleporting from the portal room")
-                    --object:set_pos(q_command.regions.esc_rooms_level_1[region.cur_area].center_pos)
                     if region[region.cur_area] and region[region.cur_area].center_pos then
-                        object:set_pos(region[region.cur_area].center_pos)
+                        --object:set_pos(region[region.cur_area].center_pos)
+
+                        -- For now, just teleport to the first area in the region
+                        object:set_pos(region[1].center_pos)
                     end
                 end
             end
