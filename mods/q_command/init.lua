@@ -27,7 +27,7 @@ end
 LOG_DEBUG = false
 
 local qiskit_service_host = minetest.settings:get("qiskit_service_host") or
-        "https://qiskit-blocks-service.herokuapp.com"
+        "https://qiskit-blocks-service.anvil.app"
 
 local qiskit_service_timeout = tonumber(minetest.settings:get("qiskit_service_timeout")) or 10
 
@@ -1347,37 +1347,37 @@ function q_command:register_q_command_block(suffix_correct_solution,
                             3, false)
 
                     local http_request_statevector = {
-                        url = qiskit_service_host .. "/api/run/statevector?backend=statevector_simulator&qasm=" ..
+                        url = qiskit_service_host .. "/_/api/run/statevector?backend=statevector_simulator&qasm=" ..
                                 url_code.urlencode(qasm_str),
                         timeout = qiskit_service_timeout
                     }
 
                     local http_request_unitary = {
-                        url = qiskit_service_host .. "/api/run/unitary?backend=unitary_simulator&qasm=" ..
+                        url = qiskit_service_host .. "/_/api/run/unitary?backend=unitary_simulator&qasm=" ..
                                 url_code.urlencode(qasm_for_unitary_str),
                         timeout = qiskit_service_timeout
                     }
 
                     local http_request_qasm = {
-                        url = qiskit_service_host .. "/api/run/qasm?backend=qasm_simulator&qasm=" ..
+                        url = qiskit_service_host .. "/_/api/run/qasm?backend=qasm_simulator&qasm=" ..
                                 url_code.urlencode(qasm_with_measurement_str) .. "&num_shots=1",
                         timeout = qiskit_service_timeout
                     }
 
                     local http_request_qasm_tomo_x = {
-                        url = qiskit_service_host .. "/api/run/qasm?backend=qasm_simulator&qasm=" ..
+                        url = qiskit_service_host .. "/_/api/run/qasm?backend=qasm_simulator&qasm=" ..
                                 url_code.urlencode(qasm_with_tomo_x_str) .. "&num_shots=1000",
                         timeout = qiskit_service_timeout
                     }
 
                     local http_request_qasm_tomo_y = {
-                        url = qiskit_service_host .. "/api/run/qasm?backend=qasm_simulator&qasm=" ..
+                        url = qiskit_service_host .. "/_/api/run/qasm?backend=qasm_simulator&qasm=" ..
                                 url_code.urlencode(qasm_with_tomo_y_str) .. "&num_shots=1000",
                         timeout = qiskit_service_timeout
                     }
 
                     local http_request_qasm_tomo_z = {
-                        url = qiskit_service_host .. "/api/run/qasm?backend=qasm_simulator&qasm=" ..
+                        url = qiskit_service_host .. "/_/api/run/qasm?backend=qasm_simulator&qasm=" ..
                                 url_code.urlencode(qasm_with_tomo_z_str) .. "&num_shots=1000",
                         timeout = qiskit_service_timeout
                     }
@@ -2810,5 +2810,4 @@ minetest.register_globalstep(function(dtime)
         end
     end
 end)
-
 
