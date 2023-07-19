@@ -775,8 +775,14 @@ function doors.register_fencegate(name, def)
 			{-1/2, -3/8, -1/2, -3/8, 3/8, 0}},
 	}
 
-	minetest.register_node(":" .. name .. "_closed", fence_closed)
-	minetest.register_node(":" .. name .. "_open", fence_open)
+	minetest.register_node(":" .. name .. "_closed", {
+		drawtype = "mesh",
+		mesh = "doors_fencegate_closed"
+	})
+	minetest.register_node(":" .. name .. "_open", {
+		drawtype = "mesh",
+		mesh = "doors_fencegate_open"
+	})
 
 	minetest.register_craft({
 		output = name .. "_closed",
