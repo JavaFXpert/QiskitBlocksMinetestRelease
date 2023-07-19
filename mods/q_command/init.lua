@@ -2508,8 +2508,8 @@ q_command.texts.creative.ja =
 ]]
 
 
-function q_command:erase_player_inventory()
-	local player_inv = minetest.get_player_by_name("singleplayer"):get_inventory()
+function q_command:erase_player_inventory(username)
+	local player_inv = minetest.get_player_by_name(username):get_inventory()
 	local player_inv_main_size = player_inv:get_size("main")
 	player_inv:set_size("main", 0)
 	player_inv:set_size("main", player_inv_main_size)
@@ -2566,7 +2566,7 @@ minetest.register_globalstep(function(dtime)
                             end
                         end
                         area.help_chat_sent = true
-                        q_command:erase_player_inventory()
+                        q_command:erase_player_inventory(object:get_player_name())
 
                         -- Make note of the current area within the region
                         if area.region and area.region.id and area.region.cur_area and
